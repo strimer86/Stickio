@@ -276,7 +276,9 @@ class StickyNote(QWidget):
 
         self.editor = QTextEdit(self)
         self.editor.setFrameShape(QTextEdit.Shape.NoFrame)
-        self.editor.viewport().setAutoFillBackground(True)
+        # Заливку отключаем: иначе viewport закрасит углы заметки своим
+        # палитровым цветом поверх скруглённого фона окна.
+        self.editor.viewport().setAutoFillBackground(False)
         self._apply_editor_background(QColor(self.note.background_color))
         self.editor.setFontPointSize(self.note.font_size)
         # Своё контекстное меню вместо стандартного: у Qt оно английское
@@ -510,15 +512,20 @@ class StickyNote(QWidget):
         self._restore_content_layers()
 
     def _apply_editor_background(self, color: QColor):
-        """Синхронизирует непрозрачный фон редактора с фоном заметки."""
-        background = color.name()
+        """Красит текст редактора, но оставляет его фон прозрачным.
+
+        Фон рисует сама заметка в paintEvent — скруглённым. Непрозрачный фон
+        редактора перекрывал бы углы заметки прямыми углами, поэтому здесь
+        задаётся только цвет текста.
+        """
         self.editor.setStyleSheet(
-            "QTextEdit { background-color: %s; color: %s; border: none; }"
-            "QTextEdit::viewport { background-color: %s; }"
-            % (background, self.note.text_color, background)
+            "QTextEdit { background-color: transparent; color: %s;"
+            " border: none; }"
+            "QTextEdit::viewport { background-color: transparent; }"
+            % self.note.text_color
         )
         self.editor.viewport().setStyleSheet(
-            "background-color: %s;" % background
+            "background-color: transparent;"
         )
 
     def _restore_content_layers(self):
@@ -788,19 +795,20 @@ class StickyNote(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        radius = 10
+        rect = QRectF(0.5, 0.5, self.width() - 1, self.height() - 1)
         path = QPainterPath()
-        path.addRoundedRect(
-            QRectF(
-                0.5,
-                0.5,
-                self.width() - 1,
-                self.height() - 1,
-            ),
-            10,
-            10,
-        )
+        path.addRoundedRect(rect, radius, radius)
+
         painter.fillPath(path, QColor(self.note.background_color))
 
         border = QColor(self.note.background_color).darker(120)
         painter.setPen(border)
         painter.drawPath(path)
+
+        # Углы остаются прозрачными за счёт WA_TranslucentBackground — тогда
+        # скругление сглаженное. Раньше здесь ставилась setMask по тому же
+        # контуру: она даёт жёсткую обрезку без сглаживания (ступеньки) и
+        # срезает внешнюю половину рамки. Дочерние виджеты теперь ничего не
+        # рисуют в углах — фон редактора и шапки прозрачный, см.
+        # _apply_editor_background.

@@ -5,8 +5,8 @@
 корзины, а не крупная надпись (раньше она доминировала и провоцировала промахи).
 """
 
-from PySide6.QtCore import Qt, QPoint, QSize, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QRectF, Qt, QPoint, QSize, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QSlider, QSpinBox, QWidget,
 )
@@ -17,6 +17,51 @@ from widgets.color_picker import ColorPopup
 # центровки относительно обрезанного sizeHint, больше — панель становится
 # выше, чем нужно для такого количества элементов.
 BTN_H = 24
+
+# Радиус скругления самой панели.
+PANEL_RADIUS = 8
+
+# Цветовой образец рисуется прямо в paintEvent кнопки. Любые вложенные
+# виджеты внутри QPushButton сдвигаются непредсказуемо: setFixedSize родителя
+# или ребёнка могут сбросить позицию в (0,0), а QGridLayout внутри QPushButton
+# игнорирует alignment. Проще нарисовать цвет самому, чем воевать с layout'ом.
+SWATCH_RADIUS = 6
+
+
+class _SwatchButton(QPushButton):
+    """Кнопка-образец: белая подложка с цветным квадратом внутри."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("swatchBackdrop")
+        self._swatch_color = QColor("#FFF4A8")
+        self.setStyleSheet(
+            "QPushButton#swatchBackdrop { padding: 0;"
+            " border: 1px solid rgba(0,0,0,110); border-radius: %dpx;"
+            " background: #ffffff; }"
+            "QPushButton#swatchBackdrop:hover { border-color: #1a1a1a; }"
+            % SWATCH_RADIUS
+        )
+
+    def set_swatch_color(self, color: QColor):
+        self._swatch_color = QColor(color)
+        self.update()
+
+    def paintEvent(self, event):
+        # Сначала рисуем QSS-фон подложки, потом — цветной квадрат сверху.
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        margin = 3
+        color_path = QPainterPath()
+        color_path.addRoundedRect(
+            margin + 0.5, margin + 0.5,
+            self.width() - 2 * margin - 1,
+            self.height() - 2 * margin - 1,
+            SWATCH_RADIUS - 2, SWATCH_RADIUS - 2,
+        )
+        painter.fillPath(color_path, self._swatch_color)
 
 
 def trash_icon(color: str = "#ffffff") -> QIcon:
@@ -51,14 +96,19 @@ class Toolbar(QWidget):
         )
         self._popup = None
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Без прозрачности фон окна заливается сплошным прямоугольником
+        # поверх QSS-рамки: border-radius: 8px рисуется, но углы всё равно
+        # остаются квадратными (проверено рендером на цветную подложку).
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         grid = QGridLayout(self)
         grid.setContentsMargins(8, 6, 8, 6)
         grid.setHorizontalSpacing(4)
         grid.setVerticalSpacing(4)
+        # Фон панели рисуется в paintEvent, а не через QSS: у top-level окна
+        # border-radius из стилей не делает углы прозрачными — они всё равно
+        # заливаются фоном окна (проверено рендером на цветную подложку).
         self.setStyleSheet(
-            "Toolbar { background: #fafafa;"
-            " border: 1px solid rgba(0,0,0,110); border-radius: 8px;"
-            " color: #1f1f1f; }"
+            "Toolbar { color: #1f1f1f; }"
             "QPushButton { color: #1f1f1f; background: #ffffff;"
             " border: 1px solid rgba(0,0,0,95); border-radius: 5px;"
             " padding: 0 6px;"
@@ -76,10 +126,6 @@ class Toolbar(QWidget):
             "QPushButton#deleteButton:hover { background: #d64534;"
             " border-color: #6f2117; }"
             "QPushButton#deleteButton:pressed { background: #a52f23; }"
-            "QPushButton#swatchBackdrop { padding: 2px;"
-            " border: 1px solid rgba(0,0,0,110); border-radius: 6px;"
-            " background: #ffffff; }"
-            "QPushButton#swatchBackdrop:hover { border-color: #1a1a1a; }"
             "QSpinBox, QLabel { color: #1f1f1f; font-size: 12px; }"
             "QSpinBox { background: #ffffff;"
             " border: 1px solid rgba(0,0,0,95); border-radius: 5px;"
@@ -95,26 +141,17 @@ class Toolbar(QWidget):
         )
 
         # --- верхняя строка: оформление -------------------------------
-        # Образец фона — кнопка внутри белой рамки: иначе на жёлтой/голубой
-        # заметке образец сливается с фоном (тот же цвет, нет визуального
-        # различия). Контейнер имеет подложку, а внутренняя кнопка — цвет.
-        self.background_button = QPushButton()
-        self.background_button.setProperty("swatch", "true")
+        # Образец фона внутри белой рамки: иначе на жёлтой/голубой заметке
+        # образец сливается с фоном. Подложка — обычная кнопка, цвет рисуется
+        # в её paintEvent напрямую через QPainter: любые вложенные виджеты
+        # внутри QPushButton сдвигаются по-разному в зависимости от того,
+        # кто первым зовёт setFixedSize/move.
+        self.background_button = _SwatchButton()
         self.background_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.background_button.setToolTip("Цвет фона")
-        self.background_button.setFixedSize(28, 16)
+        self.background_button.setFixedSize(40, BTN_H)
         self.background_button.clicked.connect(self._choose_background)
-        self.background_backdrop = QPushButton()
-        self.background_backdrop.setObjectName("swatchBackdrop")
-        self.background_backdrop.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.background_backdrop.setFixedSize(40, BTN_H)
-        self.background_backdrop.setToolTip("Цвет фона")
-        self.background_backdrop.clicked.connect(self._choose_background)
-        backdrop_layout = QGridLayout(self.background_backdrop)
-        backdrop_layout.setContentsMargins(0, 0, 0, 0)
-        backdrop_layout.addWidget(self.background_button, 0, 0,
-                                   Qt.AlignmentFlag.AlignCenter)
-        grid.addWidget(self.background_backdrop, 0, 0)
+        grid.addWidget(self.background_button, 0, 0)
 
         self.text_color_button = QPushButton("A")
         self.text_color_button.setObjectName("textColorButton")
@@ -138,13 +175,15 @@ class Toolbar(QWidget):
         self.font_size_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.font_size_spin.setToolTip("Размер шрифта")
         self.font_size_spin.setContentsMargins(0, 0, 0, 0)
-        # Внутренний lineEdit у QSpinBox центрирует текст относительно своих
-        # 20 пикселей, а QPushButton — относительно своих 24. Подгоняем
-        # padding-top так, чтобы «14» сидел на той же линии, что «B»/«A».
+        # Размер шрифта обязан совпадать с «B»/«A» (13px). QSpinBox центрирует
+        # текст внутри своего lineEdit, а QPushButton — относительно всей
+        # кнопки, поэтому при 12px цифры уезжали на 1px вверх относительно
+        # соседей. Одинаковый кегль выравнивает базовые линии сам; подгонять
+        # padding-top не нужно и вредно — он ломает симметрию сверху/снизу.
         self.font_size_spin.setStyleSheet(
             "QSpinBox { background: #ffffff;"
             " border: 1px solid rgba(0,0,0,95); border-radius: 5px;"
-            " padding: 2px 4px 0 4px;"
+            " font-size: 13px; padding: 0 4px;"
             " min-width: 36px; }"
             "QSpinBox::up-button, QSpinBox::down-button { width: 0; height: 0; }"
         )
@@ -214,14 +253,24 @@ class Toolbar(QWidget):
         self.adjustSize()
         self.setFixedSize(self.sizeHint())
 
+    def paintEvent(self, event):
+        """Скруглённый фон панели — вручную, чтобы углы были с гладким краем."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(
+            QRectF(0.5, 0.5, self.width() - 1, self.height() - 1),
+            PANEL_RADIUS, PANEL_RADIUS,
+        )
+        painter.fillPath(path, QColor("#fafafa"))
+        painter.setPen(QColor(0, 0, 0, 110))
+        painter.drawPath(path)
+
     # --- синхронизация состояния --------------------------------------
     def set_background_color(self, color: QColor):
         name = color.name()
-        self.background_button.setStyleSheet(
-            "background: %s; border: none; border-radius: 3px;" % name
-        )
+        self.background_button.set_swatch_color(color)
         self.background_button.setToolTip("Цвет фона — %s" % name.upper())
-        self.background_backdrop.setToolTip("Цвет фона — %s" % name.upper())
 
     def set_text_color(self, color: QColor):
         name = color.name()

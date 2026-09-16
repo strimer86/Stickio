@@ -1,13 +1,68 @@
 import logging
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QRect
 
 from database.database import Database
-from models.note import Note
+from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH, Note
 from services.settings import Settings
 from widgets.sticky_note import StickyNote
 
 logger = logging.getLogger(__name__)
+
+# Шаг каскада и предел попыток подбора свободного места.
+CASCADE_STEP = 28
+CASCADE_LIMIT = 60
+# Откуда начинаем раскладывать новые заметки.
+CASCADE_START = (120, 120)
+
+
+def rects_overlap(a: QRect, b: QRect) -> bool:
+    """Пересекаются ли прямоугольники (касание границ — не пересечение)."""
+    return (
+        a.x() < b.x() + b.width()
+        and b.x() < a.x() + a.width()
+        and a.y() < b.y() + b.height()
+        and b.y() < a.y() + a.height()
+    )
+
+
+def cascade_position(occupied, width: int, height: int, area: QRect,
+                     start=CASCADE_START, step: int = CASCADE_STEP,
+                     limit: int = CASCADE_LIMIT) -> tuple:
+    """Свободное место для новой заметки — каскадом от стартовой точки.
+
+    Без этого все новые заметки встают в одну точку (x/y по умолчанию из
+    схемы БД) и полностью перекрывают друг друга: создаёшь вторую — видишь
+    одну.
+
+    Args:
+        occupied: прямоугольники уже открытых заметок (QRect).
+        area: доступная геометрия экрана.
+        start: точка, от которой идёт каскад.
+
+    Returns:
+        (x, y) — левый верхний угол. Если целиком свободного места нет,
+        возвращает последнюю проверенную позицию каскада: пусть заметка
+        ляжет со сдвигом, чем точь-в-точь поверх первой (иначе создаёшь
+        вторую — видишь одну).
+    """
+    span_x = max(1, area.width() - width)
+    span_y = max(1, area.height() - height)
+    # Стартовую точку зажимаем внутрь экрана: иначе на втором мониторе со
+    # своим началом координат каскад уехал бы за пределы видимой области.
+    start_x = min(max(start[0], area.left()), area.left() + span_x)
+    start_y = min(max(start[1], area.top()), area.top() + span_y)
+
+    position = (start_x, start_y)
+    for index in range(limit):
+        offset = index * step
+        x = area.left() + (start_x - area.left() + offset) % span_x
+        y = area.top() + (start_y - area.top() + offset) % span_y
+        position = (x, y)
+        candidate = QRect(x, y, width, height)
+        if not any(rects_overlap(candidate, rect) for rect in occupied):
+            return position
+    return position
 
 
 class NoteManager(QObject):
@@ -29,11 +84,31 @@ class NoteManager(QObject):
 
     def create_note(self) -> StickyNote:
         # Настройки задают вид НОВОЙ заметки; у уже сохранённых свои цвета.
-        note_id = self.database.create_note(**self.settings.note_defaults())
+        fields = self.settings.note_defaults()
+        x, y = self._free_position(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+        fields["x"], fields["y"] = x, y
+        note_id = self.database.create_note(**fields)
         note = self.database.get_note(note_id)
         window = self._open_window(note, show=True)
         self._raise_window(window)
         return window
+
+    def _free_position(self, width: int, height: int) -> tuple:
+        """Подбирает место, где новая заметка никого не перекроет."""
+        from PySide6.QtGui import QCursor
+        from PySide6.QtWidgets import QApplication
+
+        screen = QApplication.screenAt(QCursor.pos())
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        area = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
+
+        occupied = [
+            QRect(window.note.x, window.note.y, window.note.width, window.note.height)
+            for window in self.windows.values()
+            if window.isVisible()
+        ]
+        return cascade_position(occupied, width, height, area)
 
     def _open_window(self, note: Note, show: bool) -> StickyNote:
         window = StickyNote(note, self.database, settings=self.settings)

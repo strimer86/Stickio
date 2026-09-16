@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+build/
+dist/
+dist_*/
+
+# App data: база заметок пользователя и журналы
+data/
+logs/
+
+# IDE
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini

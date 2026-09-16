@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Dev / build dependencies
+Pillow>=10.0
+pyinstaller>=6.0

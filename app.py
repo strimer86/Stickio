@@ -1,14 +1,16 @@
+import json
 import logging
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout,
-    QLabel, QMenu, QMessageBox, QPushButton, QSpinBox, QSystemTrayIcon,
-    QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QGridLayout,
+    QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSpinBox,
+    QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 from database.database import Database, DatabaseClosedError
+from services import transfer
 from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager
 from services.settings import (
@@ -470,12 +472,173 @@ class App:
 
         menu.addSeparator()
 
+        action_export_json = menu.addAction("Экспорт заметок (JSON)…")
+        action_export_json.triggered.connect(self._export_json)
+
+        action_export_html = menu.addAction("Экспорт заметок (HTML)…")
+        action_export_html.triggered.connect(self._export_html)
+
+        action_import = menu.addAction("Импорт заметок из JSON…")
+        action_import.triggered.connect(self._import_json)
+
+        action_backup = menu.addAction("Копия базы данных…")
+        action_backup.triggered.connect(self._backup_database)
+
+        menu.addSeparator()
+
         action_exit = menu.addAction("Выход")
         action_exit.triggered.connect(self.quit)
 
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    # --- Экспорт, импорт и копии базы ---------------------------------
+    #
+    # Всё это живёт в меню трея, а не в настройках: это действия «сделать
+    # сейчас», а не параметры, которые сохраняются между запусками.
+
+    def _notes_or_warn(self):
+        """Все заметки из базы. None — заметок нет, показали предупреждение."""
+        notes = self.database.get_all_notes()
+        if notes:
+            return notes
+        QMessageBox.information(
+            self.tray.parent() if self.tray else None,
+            "Stickio",
+            "Заметок нет — выгружать нечего.",
+        )
+        return None
+
+    def _ask_save_path(self, caption: str, name: str, filters: str) -> str:
+        path, _ = QFileDialog.getSaveFileName(
+            None, caption, name, filters
+        )
+        return path
+
+    def _export_json(self):
+        notes = self._notes_or_warn()
+        if not notes:
+            return
+        path = self._ask_save_path(
+            "Экспорт заметок",
+            transfer.default_export_name("json"),
+            "Файл заметок Stickio (*.json);;Все файлы (*)",
+        )
+        if not path:
+            return
+        try:
+            data = transfer.build_export(notes)
+            transfer.write_text(
+                path, json.dumps(data, ensure_ascii=False, indent=2)
+            )
+        except Exception as exc:
+            logger.exception("Failed to export notes to %s", path)
+            QMessageBox.warning(
+                None, "Экспорт заметок", "Не удалось сохранить файл:\n%s" % exc
+            )
+            return
+        self._notify(
+            "Экспорт заметок",
+            "Сохранено заметок: %d\n%s" % (len(notes), path),
+        )
+
+    def _export_html(self):
+        notes = self._notes_or_warn()
+        if not notes:
+            return
+        path = self._ask_save_path(
+            "Экспорт заметок в HTML",
+            transfer.default_export_name("html"),
+            "Веб-страница (*.html);;Все файлы (*)",
+        )
+        if not path:
+            return
+        try:
+            transfer.write_text(path, transfer.build_html(notes))
+        except Exception as exc:
+            logger.exception("Failed to export notes to %s", path)
+            QMessageBox.warning(
+                None, "Экспорт заметок", "Не удалось сохранить файл:\n%s" % exc
+            )
+            return
+        self._notify(
+            "Экспорт заметок",
+            "Сохранено заметок: %d\n%s" % (len(notes), path),
+        )
+
+    def _import_json(self):
+        path, _ = QFileDialog.getOpenFileName(
+            None,
+            "Импорт заметок",
+            "",
+            "Файл заметок Stickio (*.json);;Все файлы (*)",
+        )
+        if not path:
+            return
+        try:
+            records = transfer.read_export_file(path)
+        except transfer.TransferError as exc:
+            logger.warning("Import rejected: %s", exc)
+            QMessageBox.warning(None, "Импорт заметок", str(exc))
+            return
+
+        # Импорт не удаляет текущие заметки — он к ним добавляет.
+        answer = QMessageBox.question(
+            None,
+            "Импорт заметок",
+            "Добавить заметок из файла: %d?\n"
+            "Существующие заметки останутся на месте." % len(records),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        created = self.manager.import_notes(records)
+        if not created:
+            QMessageBox.warning(
+                None, "Импорт заметок", "Не удалось добавить ни одной заметки."
+            )
+            return
+        self._notify("Импорт заметок", "Добавлено заметок: %d" % len(created))
+
+    def _backup_database(self):
+        path = self._ask_save_path(
+            "Копия базы данных",
+            transfer.default_export_name("db"),
+            "База данных SQLite (*.db);;Все файлы (*)",
+        )
+        if not path:
+            return
+        try:
+            transfer.backup_database(self.database, path)
+        except Exception as exc:
+            logger.exception("Failed to back up database to %s", path)
+            QMessageBox.warning(
+                None,
+                "Копия базы данных",
+                "Не удалось создать копию:\n%s" % exc,
+            )
+            return
+        self._notify("Копия базы данных", "Сохранено:\n%s" % path)
+
+    def _notify(self, title: str, message: str):
+        """Сообщение о результате: всплывающая подсказка трея, иначе диалог.
+
+        Диалог показываем только в крайнем случае — из-за него приложение
+        оказывается поверх остальных окон, а результат читается и в трее.
+        """
+        logger.info("%s: %s", title, message.replace("\n", " "))
+        if self.tray is not None and self.tray.isSystemTrayAvailable():
+            self.tray.showMessage(
+                "Stickio — " + title,
+                message,
+                QSystemTrayIcon.MessageIcon.Information,
+                5000,
+            )
+            return
+        QMessageBox.information(None, title, message)
 
     def _on_tray_activated(self, reason):
         if reason in (

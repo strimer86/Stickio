@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, QRect
 from database.database import Database
 from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH, Note
 from services.settings import Settings
-from widgets.sticky_note import StickyNote
+from widgets.sticky_note import MIN_VISIBLE_HEIGHT, MIN_VISIBLE_WIDTH, StickyNote
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,55 @@ class NoteManager(QObject):
             if window.isVisible()
         ]
         return cascade_position(occupied, width, height, area)
+
+    def import_notes(self, records) -> list:
+        """Добавляет заметки из файла экспорта. Возвращает созданные окна.
+
+        Именно ДОБАВЛЯЕТ, а не заменяет: файл может быть выгрузкой с другого
+        компьютера, и затирать текущие заметки было бы потерей данных.
+
+        Координаты из файла не переносим, если они привели бы к наложению:
+        выгрузка сделана на экране другого размера, и заметка целиком за
+        границей нового выглядела бы как «импорт ничего не дал».
+        """
+        created = []
+        for fields in records:
+            fields = dict(fields)
+            width = fields.get("width", DEFAULT_WIDTH)
+            height = fields.get("height", DEFAULT_HEIGHT)
+            if not self._position_visible(fields.get("x"), fields.get("y"), width, height):
+                x, y = self._free_position(width, height)
+                fields["x"], fields["y"] = x, y
+            try:
+                note_id = self.database.create_note(**fields)
+            except Exception:
+                logger.exception("Failed to import note from file")
+                continue
+            note = self.database.get_note(note_id)
+            created.append(self._open_window(note, show=True))
+        logger.info("Imported %d notes", len(created))
+        return created
+
+    def _position_visible(self, x, y, width: int, height: int) -> bool:
+        """Поместится ли заметка из файла на какой-нибудь из экранов.
+
+        Проверяем только видимость: если координаты пересекаются с уже
+        открытыми заметками, это не ошибка — пользователь сам разложит их.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        if x is None or y is None:
+            return False
+        rect = QRect(int(x), int(y), int(width), int(height))
+        for screen in QApplication.screens():
+            avail = screen.availableGeometry()
+            inter = avail.intersected(rect)
+            if inter.width() < MIN_VISIBLE_WIDTH or inter.height() < MIN_VISIBLE_HEIGHT:
+                continue
+            if rect.top() < avail.top():
+                continue
+            return True
+        return False
 
     def _open_window(self, note: Note, show: bool) -> StickyNote:
         window = StickyNote(note, self.database, settings=self.settings)

@@ -190,6 +190,17 @@ class Database:
         except (sqlite3.Error, OSError):
             logger.exception("Database backup failed (non-fatal)")
 
+    def backup_to(self, destination):
+        """Копирует содержимое базы в уже открытое соединение-приёмник.
+
+        Нужен для ручной копии «куда скажет пользователь»: файл по этому
+        пути может быть чем угодно, поэтому пишем через sqlite backup API,
+        а не копированием notes.db — при журнале WAL свежие данные лежат
+        ещё и в notes.db-wal, и копия файла была бы устаревшей.
+        """
+        with self._lock:
+            self._ensure_conn().backup(destination)
+
     def _rotate_backups(self):
         """Сдвигает .bak.1 → .bak.2 → … → .bak.N, самый старый удаляется.
 

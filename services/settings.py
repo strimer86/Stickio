@@ -21,11 +21,13 @@ RUN_KEY = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 HOTKEY_LABELS = {
     "new_note": "Новая заметка",
     "toggle_visibility": "Показать/скрыть все",
+    "search": "Поиск по заметкам",
 }
 
 DEFAULT_HOTKEYS = {
     "new_note": "Ctrl+Shift+N",
     "toggle_visibility": "Ctrl+Shift+H",
+    "search": "Ctrl+Shift+F",
 }
 
 # Чем настраивается новая заметка. Значения по умолчанию — из модели, чтобы

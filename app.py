@@ -19,6 +19,7 @@ from services.settings import (
 )
 from widgets.color_picker import ColorPopup
 from widgets.hotkey_edit import HotkeyEdit
+from widgets.search_window import SearchWindow
 from widgets.toolbar import place_popup
 
 logger = logging.getLogger(__name__)
@@ -378,6 +379,10 @@ class App:
         self.tray = None
         self._tray_action_new = None
         self._tray_action_toggle = None
+        self._tray_action_search = None
+        # Окно поиска создаём лениво: пока его не открывали, незачем держать
+        # лишнее окно и список заметок.
+        self._search_window = None
         # App не является QObject, поэтому родителя не передаём — владение
         # остаётся за этим атрибутом, время жизни совпадает с приложением.
         self.hotkeys = GlobalHotkeys()
@@ -433,13 +438,15 @@ class App:
 
     # Действия, доступные по системной комбинации. Порядок совпадает с
     # HOTKEY_LABELS — от него зависит порядок строк в настройках.
-    HOTKEY_ACTIONS = ("new_note", "toggle_visibility")
+    HOTKEY_ACTIONS = ("new_note", "toggle_visibility", "search")
 
     def _callback_for(self, name: str):
         if name == "new_note":
             return self.manager.create_note
         if name == "toggle_visibility":
             return self._toggle_all_notes_visibility
+        if name == "search":
+            return self.open_search
         raise KeyError(name)
 
     def apply_hotkeys(self, mapping=None):
@@ -498,6 +505,10 @@ class App:
                 "Показать/скрыть все", saved.get("toggle_visibility", "")
             )
         )
+        if self._tray_action_search is not None:
+            self._tray_action_search.setText(
+                menu_label("Поиск по заметкам", saved.get("search", ""))
+            )
 
     def _toggle_all_notes_visibility(self):
         """Переключение видимости всех заметок"""
@@ -533,6 +544,12 @@ class App:
 
         action_hide = menu.addAction("Скрыть все")
         action_hide.triggered.connect(self.manager.hide_all)
+
+        menu.addSeparator()
+
+        self._tray_action_search = menu.addAction("Поиск по заметкам")
+        self._tray_action_search.setShortcut("Ctrl+F")
+        self._tray_action_search.triggered.connect(self.open_search)
 
         menu.addSeparator()
 
@@ -717,6 +734,60 @@ class App:
             # Клик по иконке: циклический показ заметок по одной.
             # (Ctrl+Shift+H остался за режимом «показать/скрыть все».)
             self.manager.show_one()
+
+    # --- поиск ---------------------------------------------------------
+
+    def open_search(self):
+        """Открывает окно поиска и ставит курсор в поле запроса."""
+        window = self._ensure_search_window()
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        window.focus_query()
+        # Пересчитываем: пока окно было скрыто, заметки могли измениться.
+        window.refresh()
+
+    def _ensure_search_window(self):
+        if self._search_window is None:
+            window = SearchWindow()
+            # Провайдер, а не снимок списка: заметки создаются и удаляются,
+            # а окно поиска живёт между вызовами.
+            window.set_notes_provider(self.database.get_all_notes)
+            window.note_activated.connect(self._focus_note)
+            self._search_window = window
+        return self._search_window
+
+    def _focus_note(self, note_id: int):
+        """Показывает заметку с подсветкой найденного.
+
+        Заметки может уже не быть: её удалили, пока окно поиска было
+        открыто. Тогда просто ничего не делаем — падать из-за этого нельзя,
+        поиск остаётся рабочим для остальных результатов.
+        """
+        window = self.manager.windows.get(note_id)
+        if window is None:
+            note = None
+            try:
+                note = self.database.get_note(note_id)
+            except DatabaseClosedError:
+                return
+            if note is None:
+                logger.info("Note %s from search results no longer exists", note_id)
+                return
+            window = self.manager._open_window(note, show=True)
+
+        window.reveal()
+
+        query = ""
+        regex = False
+        if self._search_window is not None:
+            query = self._search_window.current_query()
+            regex = self._search_window.regex_check.isChecked()
+        hits = window.highlight(query, regex=regex)
+        if not hits:
+            # Заметку открыли, но подсветить нечего (текст изменили после
+            # поиска) — окно всё равно всплыло бы, а курсор стоял бы не там.
+            window.clear_highlight()
 
     def _open_settings(self):
         # Пока открыт диалог, системные комбинации снимаем: иначе набор

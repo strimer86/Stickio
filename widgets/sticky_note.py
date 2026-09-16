@@ -639,6 +639,27 @@ class StickyNote(QWidget):
         if answer == QMessageBox.StandardButton.Yes:
             self.delete_requested.emit(self)
 
+    def highlight(self, query: str, regex: bool = False) -> int:
+        """Подсвечивает запрос в тексте заметки.
+
+        Подсветка идёт через ExtraSelection, а не через формат символов:
+        формат попал бы в документ и сохранился бы в базу, и найденное
+        слово навсегда осталось бы с жёлтым фоном.
+        """
+        from widgets.search_window import apply_highlight
+
+        return apply_highlight(self.editor, query, regex=regex)
+
+    def clear_highlight(self):
+        self.editor.setExtraSelections([])
+
+    def reveal(self):
+        """Показывает заметку и поднимает её поверх остальных окон."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.editor.setFocus()
+
     def begin_move(self, global_pos):
         self._drag_offset = global_pos - self.pos()
         self._resize = None

@@ -14,14 +14,23 @@ from services import transfer
 from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager
 from services.settings import (
-    DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, HOTKEY_LABELS,
-    Settings,
+    DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, DEFAULT_SAVE_DELAY_MS,
+    FONT_SIZE_RANGE, HOTKEY_LABELS, SAVE_DELAY_RANGE, Settings,
 )
 from widgets.color_picker import ColorPopup
 from widgets.hotkey_edit import HotkeyEdit
 from widgets.toolbar import place_popup
 
 logger = logging.getLogger(__name__)
+
+# Ширина колонки подписей в диалоге настроек. Значение подобрано по самой
+# длинной подписи («Сохранять текст через:»): если задавать ширину каждому
+# QLabel отдельно, поля встают в разные колонки — у сетки своя, у строки
+# интервала своя. Общая константа держит все поля на одной вертикали.
+LABEL_COLUMN_WIDTH = 168
+# Ширина колонки значений. Одна на все поля: образец цвета — кнопка 64 px,
+# спинбокс — 90, и разная ширина читается как «элементы разъехались».
+FIELD_COLUMN_WIDTH = 110
 
 
 def create_app_icon() -> QIcon:
@@ -110,38 +119,90 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Stickio"))
 
+        # Галки и строку с интервалом заворачиваем в тот же левый контейнер,
+        # что и сетки: у диалога есть минимальная ширина, но окно шире её,
+        # и «просто добавленные» виджеты растягиваются на всю ширину, уезжая
+        # вправо относительно полей с фиксированной шириной. Тогда на одном
+        # экране получается два разных левых края.
+        toggles = QVBoxLayout()
+        toggles.setContentsMargins(0, 0, 0, 0)
+
         self.autostart = QCheckBox("Запускать вместе с Windows")
         self.autostart.setChecked(settings.autostart_enabled())
-        layout.addWidget(self.autostart)
+        toggles.addWidget(self.autostart)
 
-        self.confirm_delete = QCheckBox("Спрашивать перед удалением заметки")
+        # Подпись держим короткой: QCheckBox не умеет переносить текст, и
+        # длинный вариант («Спрашивать перед удалением заметки», 432 px)
+        # распирал диалог с 380 до 478 — сетки с полями фиксированной ширины
+        # оставались 264, и поля вставали не на одну вертикаль с галками.
+        # Что именно спрашивается, сказано в подсказке.
+        self.confirm_delete = QCheckBox("Спрашивать при удалении")
         self.confirm_delete.setChecked(settings.confirm_delete())
         self.confirm_delete.setToolTip(
+            "Показывать запрос перед удалением заметки.\n"
             "Удаление безвозвратное, поэтому по умолчанию запрос включён."
         )
-        layout.addWidget(self.confirm_delete)
+        toggles.addWidget(self.confirm_delete)
+
+        delay_row = QHBoxLayout()
+        delay_label = QLabel("Сохранять текст через:")
+        # Ширину метки фиксируем по самой длинной подписи в колонке
+        # («Сохранять текст через:», 264 px): тогда спинбокс встаёт ровно
+        # под «Цвет фона»/«Размер шрифта», а не уезжает в отдельную колонку.
+        delay_label.setFixedWidth(LABEL_COLUMN_WIDTH)
+        delay_row.addWidget(delay_label)
+        self.save_delay_spin = QSpinBox()
+        low, high = SAVE_DELAY_RANGE
+        self.save_delay_spin.setRange(low, high)
+        # Шаг 100 мс: точность до миллисекунды здесь бессмысленна, а крутить
+        # колесом от 200 до 5000 с шагом 1 было бы мучением.
+        self.save_delay_spin.setSingleStep(100)
+        self.save_delay_spin.setValue(settings.save_delay_ms())
+        self.save_delay_spin.setSuffix(" мс")
+        self.save_delay_spin.setFixedWidth(FIELD_COLUMN_WIDTH)
+        self.save_delay_spin.setToolTip(
+            "Пауза после последнего нажатия клавиши. Пока печатаешь без "
+            "остановки, запись не идёт — она начинается, когда перестанешь "
+            "печатать."
+        )
+        delay_row.addWidget(self.save_delay_spin)
+        delay_row.addStretch(1)
+        toggles.addLayout(delay_row)
+
+        # Общий левый контейнер для того, что не сетка. Растяжка снаружи
+        # прижимает группу влево, а не растягивает её на всю ширину окна.
+        toggles_row = QHBoxLayout()
+        toggles_row.addLayout(toggles)
+        toggles_row.addStretch(1)
+        layout.addLayout(toggles_row)
 
         layout.addWidget(self._separator())
         layout.addWidget(QLabel("Новая заметка"))
 
         saved_note = settings.note_defaults()
         note_grid = QGridLayout()
-        note_grid.addWidget(QLabel("Цвет фона:"), 0, 0)
+        # Подписи одной ширины — иначе поля встают лесенкой: «Цвет текста:»
+        # короче «Размер шрифта:», и колонка значений гуляет вслед за самым
+        # длинным текстом.
+        for text in ("Цвет фона:", "Цвет текста:", "Размер шрифта:"):
+            label = QLabel(text)
+            label.setFixedWidth(LABEL_COLUMN_WIDTH)
+            note_grid.addWidget(label, note_grid.rowCount(), 0)
         self.background_button = _ColorButton(for_text=False)
         self.background_button.set_color(QColor(saved_note["background_color"]))
+        self.background_button.setFixedWidth(FIELD_COLUMN_WIDTH)
         note_grid.addWidget(self.background_button, 0, 1)
 
-        note_grid.addWidget(QLabel("Цвет текста:"), 1, 0)
         self.text_button = _ColorButton(for_text=True)
         self.text_button.set_color(QColor(saved_note["text_color"]))
+        self.text_button.setFixedWidth(FIELD_COLUMN_WIDTH)
         note_grid.addWidget(self.text_button, 1, 1)
 
-        note_grid.addWidget(QLabel("Размер шрифта:"), 2, 0)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(*FONT_SIZE_RANGE)
         self.font_size_spin.setValue(saved_note["font_size"])
         self.font_size_spin.setSuffix(" пт")
-        self.font_size_spin.setFixedWidth(90)
+        self.font_size_spin.setFixedWidth(FIELD_COLUMN_WIDTH)
         note_grid.addWidget(self.font_size_spin, 2, 1)
         layout.addLayout(self._left_aligned(note_grid))
 
@@ -155,7 +216,9 @@ class SettingsDialog(QDialog):
         grid = QGridLayout()
         saved = settings.hotkeys()
         for row, name in enumerate(HOTKEY_LABELS):
-            grid.addWidget(QLabel(HOTKEY_LABELS[name] + ":"), row, 0)
+            label = QLabel(HOTKEY_LABELS[name] + ":")
+            label.setFixedWidth(LABEL_COLUMN_WIDTH)
+            grid.addWidget(label, row, 0)
             edit = HotkeyEdit()
             edit.set_shortcut(saved.get(name, ""))
             grid.addWidget(edit, row, 1)
@@ -191,15 +254,16 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.buttons)
 
     @staticmethod
-    def _left_aligned(grid) -> QHBoxLayout:
-        """Прижимает сетку к левому краю диалога.
+    def _left_aligned(layout) -> QHBoxLayout:
+        """Прижимает содержимое к левому краю диалога.
 
-        Растяжку держим снаружи сетки, а не в её колонке: при
-        `setColumnStretch` ячейка растёт, а поле уезжает к дальнему краю —
-        между меткой и полем возникает разрыв в половину диалога.
+        Растяжку держим снаружи, а не внутри: при `setColumnStretch` ячейка
+        растёт, а поле уезжает к дальнему краю — между меткой и полем
+        возникает разрыв в половину диалога. Принимается любая раскладка
+        (сетка или вертикальная), поэтому параметр назван `layout`.
         """
         row = QHBoxLayout()
-        row.addLayout(grid)
+        row.addLayout(layout)
         row.addStretch(1)
         return row
 
@@ -221,6 +285,7 @@ class SettingsDialog(QDialog):
             elif name == "font_size":
                 self.font_size_spin.setValue(value)
         self.confirm_delete.setChecked(True)
+        self.save_delay_spin.setValue(DEFAULT_SAVE_DELAY_MS)
 
     def shortcuts(self) -> dict:
         return {name: edit.shortcut() for name, edit in self._edits.items()}
@@ -283,9 +348,13 @@ class SettingsDialog(QDialog):
                 return
 
         self._settings.set_confirm_delete(self.confirm_delete.isChecked())
+        self._settings.set_save_delay_ms(self.save_delay_spin.value())
         self._settings.set_note_defaults(self.note_settings())
         self._values = values
         self.accept()
+
+    def save_delay_ms(self) -> int:
+        return self.save_delay_spin.value()
 
     def result_shortcuts(self) -> dict:
         return getattr(self, "_values", self.shortcuts())
@@ -662,6 +731,23 @@ class App:
             # При отмене mapping=None — вернутся сохранённые значения; при
             # исключении комбинации тоже восстановятся, а не пропадут.
             self.apply_hotkeys(changed)
+        self._apply_save_delay()
+
+    def _apply_save_delay(self):
+        """Разносит интервал автосохранения по уже открытым заметкам.
+
+        Настройка читается окном один раз при создании, поэтому без этого
+        шага новое значение подхватилось бы только у заметок, открытых после
+        перезапуска — а пользователь ждёт эффекта сразу.
+        """
+        delay = self.settings.save_delay_ms()
+        for window in list(self.manager.windows.values()):
+            try:
+                window.set_save_delay(delay)
+            except Exception:
+                logger.exception(
+                    "Failed to apply save delay to note id=%s", window.note.id
+                )
 
     def quit(self):
         # 1. Снимаем системные горячие клавиши — иначе они остаются

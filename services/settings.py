@@ -39,6 +39,14 @@ DEFAULT_NOTE_SETTINGS = {
 
 FONT_SIZE_RANGE = (8, 72)
 
+# Интервал автосохранения, миллисекунды. Значение — пауза после последнего
+# нажатия клавиши, а не период: таймер в заметке одиночный (singleShot),
+# поэтому при непрерывном наборе запись вообще не идёт, пока не остановишься.
+# Меньше 200 мс — запись на каждый символ, база «пищит» на диск; больше
+# 5000 мс — при аварийном завершении теряется заметный кусок текста.
+SAVE_DELAY_RANGE = (200, 5000)
+DEFAULT_SAVE_DELAY_MS = 400
+
 
 def app_command() -> str:
     if getattr(sys, "frozen", False):
@@ -137,6 +145,27 @@ class Settings:
 
     def set_confirm_delete(self, enabled: bool):
         self.settings.setValue("confirm_delete", bool(enabled))
+
+    def save_delay_ms(self) -> int:
+        """Пауза после последнего нажатия перед записью заметки в базу.
+
+        Битое или выходящее за диапазон значение (в т.ч. следы ручной правки
+        реестра) приводим к умолчанию: слишком маленькое залило бы диск
+        записью на каждый символ, слишком большое — потеряло бы текст при
+        аварийном завершении.
+        """
+        low, high = SAVE_DELAY_RANGE
+        value = self.settings.value("save_delay_ms", DEFAULT_SAVE_DELAY_MS)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return DEFAULT_SAVE_DELAY_MS
+        if not low <= value <= high:
+            return DEFAULT_SAVE_DELAY_MS
+        return value
+
+    def set_save_delay_ms(self, value: int):
+        self.settings.setValue("save_delay_ms", int(value))
 
     def autostart_enabled(self) -> bool:
         return self.settings.value("autostart", False, type=bool)

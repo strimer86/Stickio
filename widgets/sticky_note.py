@@ -66,9 +66,12 @@ CURSORS = {
     _SOUTH: Qt.CursorShape.SizeVerCursor,
 }
 
+# Интервал автосохранения по умолчанию. Константа осталась ради тестов и
+# совместимости, но живое значение берётся из настроек (Settings.save_delay_ms):
+# пауза в 400 мс удобна не всем — кому-то нужна запись почти сразу, кому-то
+# важно, чтобы диск не дёргался на каждый абзац.
 SAVE_DELAY_MS = 400
 MIN_OPACITY = 0.2  # нижняя граница слайдера прозрачности
-
 logger = logging.getLogger(__name__)
 
 
@@ -220,8 +223,17 @@ class StickyNote(QWidget):
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
-        self._save_timer.setInterval(SAVE_DELAY_MS)
+        self._save_timer.setInterval(self.settings.save_delay_ms())
         self._save_timer.timeout.connect(self.save_note)
+
+    def set_save_delay(self, milliseconds: int):
+        """Меняет паузу автосохранения на лету.
+
+        Настройки применяются без перезапуска, поэтому уже открытые заметки
+        должны подхватить новое значение, а не жить со старым до следующего
+        запуска приложения.
+        """
+        self._save_timer.setInterval(int(milliseconds))
 
     def _build_ui(self):
         layout = QVBoxLayout(self)

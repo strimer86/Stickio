@@ -1,10 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+
+import PySide6
+
+# Русский перевод служебных строк Qt (диалог выбора цвета, кнопки Qt).
+# Кладём туда же, где PySide6 держит translations: main.py ищет файл именно
+# по <_MEIPASS>/PySide6/translations, когда QLibraryInfo указывает в пустоту.
+_QT_RU = os.path.join(
+    os.path.dirname(PySide6.__file__), 'translations', 'qtbase_ru.qm'
+)
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('Noteit.ico', '.')],
+    datas=[('Noteit.ico', '.'), (_QT_RU, 'PySide6/translations')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

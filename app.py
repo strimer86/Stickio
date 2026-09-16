@@ -3,14 +3,17 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QMenu, QSystemTrayIcon, QVBoxLayout,
-    QLabel, QWidget,
+    QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QLabel, QMenu,
+    QMessageBox, QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 from database.database import Database, DatabaseClosedError
-from services.hotkeys import GlobalHotkeys
+from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager
-from services.settings import Settings
+from services.settings import (
+    DEFAULT_HOTKEYS, HOTKEY_LABELS, Settings,
+)
+from widgets.hotkey_edit import HotkeyEdit
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +42,22 @@ def create_app_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def menu_label(text: str, shortcut: str) -> str:
+    """Подпись пункта меню с комбинацией через табуляцию (правая колонка)."""
+    return "%s\t%s" % (text, shortcut) if shortcut else text
+
+
 class SettingsDialog(QDialog):
+    """Настройки: автозапуск и системные горячие клавиши."""
+
     def __init__(self, settings: Settings, parent: QWidget = None):
         super().__init__(parent)
         self._settings = settings
+        self._edits = {}
         self.setWindowTitle("Настройки")
+        self.setMinimumWidth(380)
 
         layout = QVBoxLayout(self)
-
         layout.addWidget(QLabel("Stickio"))
 
         self.autostart = QCheckBox("Запускать вместе с Windows")
@@ -56,11 +67,98 @@ class SettingsDialog(QDialog):
         self.autostart.clicked.connect(settings.set_autostart)
         layout.addWidget(self.autostart)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Close
+        layout.addWidget(self._separator())
+        layout.addWidget(QLabel("Горячие клавиши"))
+
+        grid = QGridLayout()
+        grid.setColumnStretch(1, 1)
+        saved = settings.hotkeys()
+        for row, name in enumerate(HOTKEY_LABELS):
+            grid.addWidget(QLabel(HOTKEY_LABELS[name] + ":"), row, 0)
+            edit = HotkeyEdit()
+            edit.set_shortcut(saved.get(name, ""))
+            grid.addWidget(edit, row, 1)
+            self._edits[name] = edit
+        layout.addLayout(grid)
+
+        self.hint = QLabel(
+            "Клавиша назначается при фокусе в поле. Backspace — снять. "
+            "Нужен модификатор: Ctrl, Alt, Shift или Win."
         )
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self.hint.setWordWrap(True)
+        self.hint.setStyleSheet("color: #666666; font-size: 11px;")
+        layout.addWidget(self.hint)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.RestoreDefaults
+        )
+        # Qt не переводит стандартные кнопки, если не загружен .qm, а
+        # приложение русскоязычное — подписи задаём сами.
+        for standard, text in (
+            (QDialogButtonBox.StandardButton.Ok, "ОК"),
+            (QDialogButtonBox.StandardButton.Cancel, "Отмена"),
+            (QDialogButtonBox.StandardButton.RestoreDefaults, "По умолчанию"),
+        ):
+            self.buttons.button(standard).setText(text)
+        self.buttons.accepted.connect(self._accept)
+        self.buttons.rejected.connect(self.reject)
+        self.buttons.button(
+            QDialogButtonBox.StandardButton.RestoreDefaults
+        ).clicked.connect(self._restore_defaults)
+        layout.addWidget(self.buttons)
+
+    @staticmethod
+    def _separator() -> QFrame:
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        return line
+
+    def _restore_defaults(self):
+        for name, edit in self._edits.items():
+            edit.set_shortcut(DEFAULT_HOTKEYS[name])
+
+    def shortcuts(self) -> dict:
+        return {name: edit.shortcut() for name, edit in self._edits.items()}
+
+    def _accept(self):
+        """Проверяет комбинации и закрывает диалог, если всё сошлось."""
+        values = {}
+        for name, edit in self._edits.items():
+            raw = edit.shortcut()
+            if not raw:
+                # Пусто — значит действие отключено, это допустимо
+                values[name] = ""
+                continue
+            try:
+                values[name] = normalize_shortcut(raw)
+            except HotkeyError as exc:
+                QMessageBox.warning(self, "Настройки", str(exc))
+                edit.setFocus()
+                return
+
+        used = {}
+        for name, value in values.items():
+            if not value:
+                continue
+            if value in used:
+                QMessageBox.warning(
+                    self,
+                    "Настройки",
+                    "Комбинация %s назначена дважды: «%s» и «%s»."
+                    % (value, HOTKEY_LABELS[used[value]], HOTKEY_LABELS[name]),
+                )
+                self._edits[name].setFocus()
+                return
+            used[value] = name
+
+        self._values = values
+        self.accept()
+
+    def result_shortcuts(self) -> dict:
+        return getattr(self, "_values", self.shortcuts())
 
 
 class App:
@@ -77,6 +175,8 @@ class App:
         self.database = Database()
         self.manager = NoteManager(self.database)
         self.tray = None
+        self._tray_action_new = None
+        self._tray_action_toggle = None
         # App не является QObject, поэтому родителя не передаём — владение
         # остаётся за этим атрибутом, время жизни совпадает с приложением.
         self.hotkeys = GlobalHotkeys()
@@ -101,7 +201,7 @@ class App:
         # Трей создаём до хоткеев: если комбинацию заняла другая программа,
         # пользователю нужно показать уведомление, а показывать его нечем.
         self._setup_tray()
-        self._setup_shortcuts()
+        self.apply_hotkeys()
         # гарантируем сохранение при завершении процесса Windows (перезагрузка/выключение)
         try:
             self.app.aboutToQuit.connect(self._save_all)
@@ -130,29 +230,73 @@ class App:
             logger.warning("Hotkey %s (%s) is not available", key, sequence)
         return ok
 
-    def _setup_shortcuts(self):
-        """Настройка глобальных горячих клавиш"""
+    # Действия, доступные по системной комбинации. Порядок совпадает с
+    # HOTKEY_LABELS — от него зависит порядок строк в настройках.
+    HOTKEY_ACTIONS = ("new_note", "toggle_visibility")
+
+    def _callback_for(self, name: str):
+        if name == "new_note":
+            return self.manager.create_note
+        if name == "toggle_visibility":
+            return self._toggle_all_notes_visibility
+        raise KeyError(name)
+
+    def apply_hotkeys(self, mapping=None):
+        """Перерегистрирует системные комбинации.
+
+        mapping=None — взять сохранённые (перечитать после отмены диалога),
+        иначе — сначала записать новые значения.
+        """
+        if mapping is not None:
+            self.settings.set_hotkeys(mapping)
+
         self.hotkeys.install(self.app)
-        # Создание новой заметки: Ctrl+Shift+N
-        self._add_app_shortcut('new_note', "Ctrl+Shift+N", self.manager.create_note)
-        # Показать/скрыть все заметки: Ctrl+Shift+H
-        self._add_app_shortcut(
-            'toggle_visibility', "Ctrl+Shift+H", self._toggle_all_notes_visibility
+        self.hotkeys.unregister_all()
+        self.hotkeys.failed.clear()
+
+        saved = self.settings.hotkeys()
+        for name in self.HOTKEY_ACTIONS:
+            shortcut = saved.get(name, "")
+            if not shortcut:
+                # Пустая строка — пользователь снял комбинацию намеренно,
+                # а не ошибся; молчим, действие остаётся в меню трея.
+                logger.info("Hotkey %s is disabled", name)
+                continue
+            self._add_app_shortcut(name, shortcut, self._callback_for(name))
+
+        self._refresh_hotkey_labels()
+        self._warn_failed_hotkeys()
+
+    def _warn_failed_hotkeys(self):
+        if not self.hotkeys.failed:
+            return
+        logger.warning(
+            "Some hotkeys are busy: %s", ", ".join(self.hotkeys.failed)
         )
-        if self.hotkeys.failed:
-            logger.warning(
-                "Some hotkeys are busy: %s", ", ".join(self.hotkeys.failed)
+        # Пользователь должен знать, почему привычная комбинация молчит
+        if self.tray is not None and self.tray.isSystemTrayAvailable():
+            self.tray.showMessage(
+                "Stickio",
+                "Не удалось занять горячие клавиши: %s.\n"
+                "Их перехватила другая программа."
+                % ", ".join(self.hotkeys.failed),
+                QSystemTrayIcon.MessageIcon.Warning,
+                6000,
             )
-            # Пользователь должен знать, почему привычная комбинация молчит
-            if self.tray is not None and self.tray.isSystemTrayAvailable():
-                self.tray.showMessage(
-                    "Stickio",
-                    "Не удалось занять горячие клавиши: %s.\n"
-                    "Их перехватила другая программа."
-                    % ", ".join(self.hotkeys.failed),
-                    QSystemTrayIcon.MessageIcon.Warning,
-                    6000,
-                )
+
+    def _refresh_hotkey_labels(self):
+        """Обновляет подписи меню трея под текущие комбинации."""
+        if self._tray_action_new is None:
+            return
+        saved = self.settings.hotkeys()
+        self._tray_action_new.setText(
+            menu_label("+ Новая заметка", saved.get("new_note", ""))
+        )
+        self._tray_action_toggle.setText(
+            menu_label(
+                "Показать/скрыть все", saved.get("toggle_visibility", "")
+            )
+        )
 
     def _toggle_all_notes_visibility(self):
         """Переключение видимости всех заметок"""
@@ -171,16 +315,20 @@ class App:
 
         menu = QMenu()
 
-        action_new = menu.addAction("+ Новая заметка\tCtrl+Shift+N")
+        # Подписи с комбинациями ставятся в _refresh_hotkey_labels: после
+        # переназначения текст меню должен меняться вместе с ними.
+        action_new = menu.addAction("+ Новая заметка")
         action_new.triggered.connect(self.manager.create_note)
+        self._tray_action_new = action_new
 
         action_show_one = menu.addAction("Показать одну")
         action_show_one.triggered.connect(self.manager.show_one)
 
         menu.addSeparator()
 
-        action_show = menu.addAction("Показать/скрыть все\tCtrl+Shift+H")
+        action_show = menu.addAction("Показать/скрыть все")
         action_show.triggered.connect(self._toggle_all_notes_visibility)
+        self._tray_action_toggle = action_show
 
         action_hide = menu.addAction("Скрыть все")
         action_hide.triggered.connect(self.manager.hide_all)
@@ -209,7 +357,18 @@ class App:
             self.manager.show_one()
 
     def _open_settings(self):
-        SettingsDialog(self.settings).exec()
+        # Пока открыт диалог, системные комбинации снимаем: иначе набор
+        # Ctrl+Shift+N в поле захвата параллельно создал бы новую заметку.
+        self.hotkeys.unregister_all()
+        changed = None
+        try:
+            dialog = SettingsDialog(self.settings)
+            if dialog.exec():
+                changed = dialog.result_shortcuts()
+        finally:
+            # При отмене mapping=None — вернутся сохранённые значения; при
+            # исключении комбинации тоже восстановятся, а не пропадут.
+            self.apply_hotkeys(changed)
 
     def quit(self):
         # 1. Снимаем системные горячие клавиши — иначе они остаются

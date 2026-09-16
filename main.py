@@ -1,12 +1,51 @@
 import ctypes
 import logging
+import os
 import sys
 
+from PySide6.QtCore import QLibraryInfo, QTranslator
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 import logging_config
 
 logger = logging.getLogger(__name__)
+
+
+def translation_dirs() -> list:
+    """Каталоги, где ищем qtbase_ru.qm.
+
+    В собранном приложении `QLibraryInfo` обычно отдаёт путь, которого рядом
+    с exe нет, поэтому вторым кандидатом идёт распакованная PySide6 — именно
+    туда PyInstaller кладёт translations, если они добавлены в .spec.
+    """
+    dirs = []
+    try:
+        dirs.append(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
+    except Exception:
+        logger.exception("Failed to locate Qt translations path")
+
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        dirs.append(os.path.join(base, "PySide6", "translations"))
+    return dirs
+
+
+def install_translator(app: QApplication):
+    """Подключает русский перевод служебных строк Qt.
+
+    Без него английскими остаются диалог выбора цвета, кнопки QMessageBox
+    и стандартное меню редактора — всё, чего нет в нашем коде. Перевод не
+    обязателен для работы: если .qm не нашёлся (сборка без translations),
+    приложение просто остаётся со строками Qt по умолчанию.
+    """
+    translator = QTranslator(app)
+    for directory in translation_dirs():
+        if translator.load("qtbase_ru", directory):
+            app.installTranslator(translator)
+            logger.info("Qt translation loaded from %s", directory)
+            return translator
+    logger.info("Qt translation not found in %s", translation_dirs())
+    return None
 
 
 def set_app_user_model_id():
@@ -55,6 +94,7 @@ def main():
     logging_config.setup_logging()
 
     app = QApplication(sys.argv)
+    install_translator(app)
 
     try:
         app_checker = SingleInstanceChecker()

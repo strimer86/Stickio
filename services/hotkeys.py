@@ -52,6 +52,25 @@ _VK_SPECIAL = {
 }
 
 
+# Обратное отображение vk -> подпись для канонического вида комбинации.
+# Порядок подписей здесь же задаёт порядок следования модификаторов.
+_MODIFIER_ORDER = (
+    (MOD_CONTROL, "Ctrl"),
+    (MOD_ALT, "Alt"),
+    (MOD_SHIFT, "Shift"),
+    (MOD_WIN, "Win"),
+)
+
+_VK_DISPLAY = {
+    0x70: "F1", 0x71: "F2", 0x72: "F3", 0x73: "F4",
+    0x74: "F5", 0x75: "F6", 0x76: "F7", 0x77: "F8",
+    0x78: "F9", 0x79: "F10", 0x7A: "F11", 0x7B: "F12",
+    0x20: "Space", 0x2D: "Insert", 0x2E: "Delete",
+    0x24: "Home", 0x23: "End", 0x21: "PageUp", 0x22: "PageDown",
+    0x25: "Left", 0x26: "Up", 0x27: "Right", 0x28: "Down",
+}
+
+
 class HotkeyError(RuntimeError):
     """Горячую клавишу не удалось зарегистрировать."""
 
@@ -88,6 +107,34 @@ def parse_shortcut(shortcut: str) -> tuple[int, int]:
     if not modifiers:
         raise HotkeyError("Нужен хотя бы один модификатор: %r" % shortcut)
     return modifiers | MOD_NOREPEAT, vk
+
+
+def key_name(vk: int) -> str:
+    """Подпись клавиши по её виртуальному коду."""
+    if vk in _VK_DISPLAY:
+        return _VK_DISPLAY[vk]
+    if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:  # цифры и латиница
+        return chr(vk)
+    raise HotkeyError("Нет подписи для виртуального кода 0x%X" % vk)
+
+
+def normalize_shortcut(shortcut: str) -> str:
+    """Приводит комбинацию к виду «Ctrl+Shift+N».
+
+    Нужна, чтобы пользовательский ввод из разных источников (поле захвата
+    клавиш, ручная правка в QSettings, старые значения) хранился и
+    сравнивался одинаково: ``ctrl+shift+n`` и ``Shift+Ctrl+N`` — одна
+    комбинация, а строковое сравнение так не считает.
+
+    Raises:
+        HotkeyError: комбинация не разобралась.
+    """
+    modifiers, vk = parse_shortcut(shortcut)
+    parts = [
+        name for bit, name in _MODIFIER_ORDER if modifiers & bit
+    ]
+    parts.append(key_name(vk))
+    return "+".join(parts)
 
 
 class _NativeFilter(QAbstractNativeEventFilter):

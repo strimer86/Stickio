@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from database.database import DatabaseClosedError
 from models.note import Note
+from services.settings import Settings
 from widgets.toolbar import Toolbar
 
 APP_ICON = QIcon()
@@ -195,10 +196,13 @@ class StickyNote(QWidget):
     delete_requested = Signal(object)
     new_note_requested = Signal()
 
-    def __init__(self, note: Note, database, parent=None):
+    def __init__(self, note: Note, database, settings=None, parent=None):
         super().__init__(parent)
         self.note = note
         self.database = database
+        # Settings создаём лениво и только если не передали: окно может
+        # подниматься и в тестах, где хранилище настроек ни к чему.
+        self.settings = settings or Settings()
 
         self._drag_offset = None
         self._resize = None
@@ -606,6 +610,13 @@ class StickyNote(QWidget):
         self.save_note()
 
     def confirm_delete(self):
+        # Подтверждение отключаемо: заметки часто создаются на один день, и
+        # лишний диалог на каждую утомляет. По умолчанию всё же спрашиваем —
+        # удаление безвозвратное, а кнопка корзины рядом с «B».
+        if not self.settings.confirm_delete():
+            self.delete_requested.emit(self)
+            return
+
         answer = QMessageBox.question(
             self,
             "Удалить заметку",

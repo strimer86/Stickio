@@ -4,6 +4,11 @@ import os
 import sys
 
 from PySide6.QtCore import QSettings
+from PySide6.QtGui import QColor
+
+from models.note import (
+    DEFAULT_BACKGROUND, DEFAULT_FONT_SIZE, DEFAULT_TEXT_COLOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +27,17 @@ DEFAULT_HOTKEYS = {
     "new_note": "Ctrl+Shift+N",
     "toggle_visibility": "Ctrl+Shift+H",
 }
+
+# Чем настраивается новая заметка. Значения по умолчанию — из модели, чтобы
+# не держать вторую копию констант: расхождение сразу дало бы разные цвета
+# «по умолчанию» и при первом запуске.
+DEFAULT_NOTE_SETTINGS = {
+    "background_color": DEFAULT_BACKGROUND,
+    "text_color": DEFAULT_TEXT_COLOR,
+    "font_size": DEFAULT_FONT_SIZE,
+}
+
+FONT_SIZE_RANGE = (8, 72)
 
 
 def app_command() -> str:
@@ -77,6 +93,50 @@ class Settings:
                 self.settings.setValue(name, (value or "").strip())
         finally:
             self.settings.endGroup()
+
+    def note_defaults(self) -> dict:
+        """Параметры НОВОЙ заметки.
+
+        Влияют только на создаваемые заметки — уже существующие не трогаем:
+        пользователь мог специально перекрасить именно эту.
+        """
+        self.settings.beginGroup("note")
+        try:
+            result = {}
+            for name, default in DEFAULT_NOTE_SETTINGS.items():
+                value = self.settings.value(name, default, type=type(default))
+                # Битое значение (вручную правленный реестр) не должно ломать
+                # создание заметки — берём умолчание.
+                if not self._is_valid_note_value(name, value):
+                    value = default
+                result[name] = value
+            return result
+        finally:
+            self.settings.endGroup()
+
+    @staticmethod
+    def _is_valid_note_value(name: str, value) -> bool:
+        low, high = FONT_SIZE_RANGE
+        if name == "font_size":
+            return isinstance(value, int) and low <= value <= high
+        # Цвет хранится строкой #RRGGBB; всё остальное — мусор
+        return isinstance(value, str) and QColor(value).isValid()
+
+    def set_note_defaults(self, mapping: dict):
+        self.settings.beginGroup("note")
+        try:
+            for name, value in mapping.items():
+                if name in DEFAULT_NOTE_SETTINGS:
+                    self.settings.setValue(name, value)
+        finally:
+            self.settings.endGroup()
+
+    def confirm_delete(self) -> bool:
+        """Спрашивать ли подтверждение перед удалением заметки."""
+        return self.settings.value("confirm_delete", True, type=bool)
+
+    def set_confirm_delete(self, enabled: bool):
+        self.settings.setValue("confirm_delete", bool(enabled))
 
     def autostart_enabled(self) -> bool:
         return self.settings.value("autostart", False, type=bool)

@@ -4,15 +4,17 @@ from PySide6.QtCore import QObject
 
 from database.database import Database
 from models.note import Note
+from services.settings import Settings
 from widgets.sticky_note import StickyNote
 
 logger = logging.getLogger(__name__)
 
 
 class NoteManager(QObject):
-    def __init__(self, database: Database, parent=None):
+    def __init__(self, database: Database, parent=None, settings=None):
         super().__init__(parent)
         self.database = database
+        self.settings = settings or Settings()
         self.windows: dict[int, StickyNote] = {}
         # Кто был виден на момент последнего hide_all — чтобы Ctrl+Shift+H
         # возвращал ровно ту картину, что была, а не «включить всё».
@@ -26,14 +28,15 @@ class NoteManager(QObject):
             self._open_window(note, show=True)
 
     def create_note(self) -> StickyNote:
-        note_id = self.database.create_note()
+        # Настройки задают вид НОВОЙ заметки; у уже сохранённых свои цвета.
+        note_id = self.database.create_note(**self.settings.note_defaults())
         note = self.database.get_note(note_id)
         window = self._open_window(note, show=True)
         self._raise_window(window)
         return window
 
     def _open_window(self, note: Note, show: bool) -> StickyNote:
-        window = StickyNote(note, self.database)
+        window = StickyNote(note, self.database, settings=self.settings)
         window.delete_requested.connect(self.delete_window)
         window.new_note_requested.connect(self.create_note)
         self.windows[note.id] = window

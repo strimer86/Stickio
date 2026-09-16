@@ -344,36 +344,45 @@ class Toolbar(QWidget):
     @staticmethod
     def _place_popup(popup: ColorPopup, anchor: QWidget):
         """Ставит попап сбоку от панели, не перекрывая её."""
-        from PySide6.QtWidgets import QApplication
+        place_popup(popup, anchor)
 
-        popup.adjustSize()
-        panel = anchor.window()
-        screen = QApplication.screenAt(
-            panel.mapToGlobal(QPoint(panel.width() // 2, 0))
-        ) or QApplication.primaryScreen()
-        area = screen.availableGeometry()
 
-        popup.resize(
-            popup.width(), min(popup.height(), max(160, area.height() - 16))
+def place_popup(popup: ColorPopup, anchor: QWidget):
+    """Ставит попап сбоку от окна-якоря, не перекрывая его.
+
+    Отдельная функция, а не метод: палитру открывают и панель заметки, и
+    диалог настроек, а размещать её одинаково нужно в обоих случаях.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    popup.adjustSize()
+    panel = anchor.window()
+    screen = QApplication.screenAt(
+        panel.mapToGlobal(QPoint(panel.width() // 2, 0))
+    ) or QApplication.primaryScreen()
+    area = screen.availableGeometry()
+
+    popup.resize(
+        popup.width(), min(popup.height(), max(160, area.height() - 16))
+    )
+
+    anchor_top = anchor.mapToGlobal(QPoint(0, 0))
+    gap = 6
+    right_x = panel.mapToGlobal(QPoint(panel.width(), 0)).x() + gap
+    left_x = panel.mapToGlobal(QPoint(0, 0)).x() - popup.width() - gap
+
+    if right_x + popup.width() <= area.right() + 1:
+        x = right_x
+    elif left_x >= area.left():
+        x = left_x
+    else:
+        x = min(
+            max(right_x, area.left()),
+            area.right() - popup.width() + 1,
         )
 
-        anchor_top = anchor.mapToGlobal(QPoint(0, 0))
-        gap = 6
-        right_x = panel.mapToGlobal(QPoint(panel.width(), 0)).x() + gap
-        left_x = panel.mapToGlobal(QPoint(0, 0)).x() - popup.width() - gap
-
-        if right_x + popup.width() <= area.right() + 1:
-            x = right_x
-        elif left_x >= area.left():
-            x = left_x
-        else:
-            x = min(
-                max(right_x, area.left()),
-                area.right() - popup.width() + 1,
-            )
-
-        y = anchor_top.y()
-        if y + popup.height() > area.bottom() + 1:
-            y = max(area.top(), area.bottom() - popup.height() + 1)
-        popup.move(QPoint(x, y))
-        popup.show()
+    y = anchor_top.y()
+    if y + popup.height() > area.bottom() + 1:
+        y = max(area.top(), area.bottom() - popup.height() + 1)
+    popup.move(QPoint(x, y))
+    popup.show()

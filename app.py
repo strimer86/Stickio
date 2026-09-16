@@ -1,19 +1,23 @@
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QLabel, QMenu,
-    QMessageBox, QSystemTrayIcon, QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout,
+    QLabel, QMenu, QMessageBox, QPushButton, QSpinBox, QSystemTrayIcon,
+    QVBoxLayout, QWidget,
 )
 
 from database.database import Database, DatabaseClosedError
 from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager
 from services.settings import (
-    DEFAULT_HOTKEYS, HOTKEY_LABELS, Settings,
+    DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, HOTKEY_LABELS,
+    Settings,
 )
+from widgets.color_picker import ColorPopup
 from widgets.hotkey_edit import HotkeyEdit
+from widgets.toolbar import place_popup
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +51,50 @@ def menu_label(text: str, shortcut: str) -> str:
     return "%s\t%s" % (text, shortcut) if shortcut else text
 
 
+class _ColorButton(QPushButton):
+    """Образец цвета: показывает текущий и открывает палитру по клику."""
+
+    color_changed = Signal(QColor)
+
+    def __init__(self, for_text: bool = False, parent: QWidget = None):
+        super().__init__(parent)
+        self._for_text = for_text
+        self._color = QColor("#FFFFFF")
+        self._popup = None
+        self.setFixedSize(64, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clicked.connect(self._choose)
+
+    def color(self) -> QColor:
+        return QColor(self._color)
+
+    def set_color(self, color: QColor):
+        self._color = QColor(color)
+        self.setStyleSheet(
+            "QPushButton { background: %s;"
+            " border: 1px solid rgba(0,0,0,110); border-radius: 5px; }"
+            % self._color.name()
+        )
+        self.setToolTip(self._color.name().upper())
+
+    def _choose(self):
+        popup = ColorPopup(self, for_text=self._for_text)
+        popup.set_current(self._color)
+        popup.color_selected.connect(self._on_selected)
+        popup.destroyed.connect(self._forget)
+        self._popup = popup
+        place_popup(popup, self)
+
+    def _on_selected(self, color: QColor):
+        self.set_color(color)
+        self.color_changed.emit(QColor(color))
+        if self._popup is not None:
+            self._popup.close()
+
+    def _forget(self, *_args):
+        self._popup = None
+
+
 class SettingsDialog(QDialog):
     """Настройки: автозапуск и системные горячие клавиши."""
 
@@ -62,16 +110,47 @@ class SettingsDialog(QDialog):
 
         self.autostart = QCheckBox("Запускать вместе с Windows")
         self.autostart.setChecked(settings.autostart_enabled())
-        # clicked срабатывает только при реальном действии пользователя:
-        # программное setChecked при открытии диалога больше не трогает реестр
-        self.autostart.clicked.connect(settings.set_autostart)
         layout.addWidget(self.autostart)
+
+        self.confirm_delete = QCheckBox("Спрашивать перед удалением заметки")
+        self.confirm_delete.setChecked(settings.confirm_delete())
+        self.confirm_delete.setToolTip(
+            "Удаление безвозвратное, поэтому по умолчанию запрос включён."
+        )
+        layout.addWidget(self.confirm_delete)
+
+        layout.addWidget(self._separator())
+        layout.addWidget(QLabel("Новая заметка"))
+
+        saved_note = settings.note_defaults()
+        note_grid = QGridLayout()
+        note_grid.addWidget(QLabel("Цвет фона:"), 0, 0)
+        self.background_button = _ColorButton(for_text=False)
+        self.background_button.set_color(QColor(saved_note["background_color"]))
+        note_grid.addWidget(self.background_button, 0, 1)
+
+        note_grid.addWidget(QLabel("Цвет текста:"), 1, 0)
+        self.text_button = _ColorButton(for_text=True)
+        self.text_button.set_color(QColor(saved_note["text_color"]))
+        note_grid.addWidget(self.text_button, 1, 1)
+
+        note_grid.addWidget(QLabel("Размер шрифта:"), 2, 0)
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(*FONT_SIZE_RANGE)
+        self.font_size_spin.setValue(saved_note["font_size"])
+        self.font_size_spin.setSuffix(" пт")
+        self.font_size_spin.setFixedWidth(90)
+        note_grid.addWidget(self.font_size_spin, 2, 1)
+        layout.addLayout(self._left_aligned(note_grid))
+
+        self.note_hint = QLabel("Относится только к новым заметкам.")
+        self.note_hint.setStyleSheet("color: #666666; font-size: 11px;")
+        layout.addWidget(self.note_hint)
 
         layout.addWidget(self._separator())
         layout.addWidget(QLabel("Горячие клавиши"))
 
         grid = QGridLayout()
-        grid.setColumnStretch(1, 1)
         saved = settings.hotkeys()
         for row, name in enumerate(HOTKEY_LABELS):
             grid.addWidget(QLabel(HOTKEY_LABELS[name] + ":"), row, 0)
@@ -79,7 +158,7 @@ class SettingsDialog(QDialog):
             edit.set_shortcut(saved.get(name, ""))
             grid.addWidget(edit, row, 1)
             self._edits[name] = edit
-        layout.addLayout(grid)
+        layout.addLayout(self._left_aligned(grid))
 
         self.hint = QLabel(
             "Клавиша назначается при фокусе в поле. Backspace — снять. "
@@ -110,6 +189,19 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.buttons)
 
     @staticmethod
+    def _left_aligned(grid) -> QHBoxLayout:
+        """Прижимает сетку к левому краю диалога.
+
+        Растяжку держим снаружи сетки, а не в её колонке: при
+        `setColumnStretch` ячейка растёт, а поле уезжает к дальнему краю —
+        между меткой и полем возникает разрыв в половину диалога.
+        """
+        row = QHBoxLayout()
+        row.addLayout(grid)
+        row.addStretch(1)
+        return row
+
+    @staticmethod
     def _separator() -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -119,12 +211,27 @@ class SettingsDialog(QDialog):
     def _restore_defaults(self):
         for name, edit in self._edits.items():
             edit.set_shortcut(DEFAULT_HOTKEYS[name])
+        for name, value in DEFAULT_NOTE_SETTINGS.items():
+            if name == "background_color":
+                self.background_button.set_color(QColor(value))
+            elif name == "text_color":
+                self.text_button.set_color(QColor(value))
+            elif name == "font_size":
+                self.font_size_spin.setValue(value)
+        self.confirm_delete.setChecked(True)
 
     def shortcuts(self) -> dict:
         return {name: edit.shortcut() for name, edit in self._edits.items()}
 
-    def _accept(self):
-        """Проверяет комбинации и закрывает диалог, если всё сошлось."""
+    def note_settings(self) -> dict:
+        return {
+            "background_color": self.background_button.color().name(),
+            "text_color": self.text_button.color().name(),
+            "font_size": self.font_size_spin.value(),
+        }
+
+    def _validated_hotkeys(self):
+        """Проверяет комбинации. None — есть ошибка, диалог закрывать нельзя."""
         values = {}
         for name, edit in self._edits.items():
             raw = edit.shortcut()
@@ -137,7 +244,7 @@ class SettingsDialog(QDialog):
             except HotkeyError as exc:
                 QMessageBox.warning(self, "Настройки", str(exc))
                 edit.setFocus()
-                return
+                return None
 
         used = {}
         for name, value in values.items():
@@ -151,9 +258,30 @@ class SettingsDialog(QDialog):
                     % (value, HOTKEY_LABELS[used[value]], HOTKEY_LABELS[name]),
                 )
                 self._edits[name].setFocus()
-                return
+                return None
             used[value] = name
+        return values
 
+    def _accept(self):
+        """Применяет всё разом: ни одна правка не должна жить после «Отмены»."""
+        values = self._validated_hotkeys()
+        if values is None:
+            return
+
+        # Автозапуск пишет в реестр и может упасть из-за политик — применяем
+        # первым, чтобы при неудаче не сохранить половину настроек.
+        if self.autostart.isChecked() != self._settings.autostart_enabled():
+            try:
+                self._settings.set_autostart(self.autostart.isChecked())
+            except Exception:
+                logger.exception("Failed to change autostart")
+                QMessageBox.warning(
+                    self, "Настройки", "Не удалось изменить автозапуск."
+                )
+                return
+
+        self._settings.set_confirm_delete(self.confirm_delete.isChecked())
+        self._settings.set_note_defaults(self.note_settings())
         self._values = values
         self.accept()
 
@@ -173,7 +301,9 @@ class App:
         self.app = app
         self.settings = Settings()
         self.database = Database()
-        self.manager = NoteManager(self.database)
+        # Настройки передаём менеджеру: из них берётся вид новой заметки и
+        # то, спрашивать ли подтверждение удаления.
+        self.manager = NoteManager(self.database, settings=self.settings)
         self.tray = None
         self._tray_action_new = None
         self._tray_action_toggle = None

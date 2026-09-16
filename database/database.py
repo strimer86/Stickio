@@ -69,6 +69,11 @@ _MIGRATIONS = {
     "content": "ALTER TABLE notes ADD COLUMN content TEXT DEFAULT ''",
 }
 
+# Колонки, которые можно задать при создании заметки. Список берётся из
+# миграций, а не дублируется: добавили колонку — она сразу доступна и в
+# INSERT, и в миграции, и расхождение между ними невозможно.
+NOTE_COLUMNS = frozenset(_MIGRATIONS)
+
 
 class Database:
     """Класс для работы с базой данных заметок.
@@ -240,16 +245,38 @@ class Database:
         except sqlite3.Error:
             logger.exception("Failed to close database connection")
 
-    def create_note(self) -> int:
+    def create_note(self, **fields) -> int:
         """Создает новую заметку в базе данных.
+
+        Args:
+            **fields: значения колонок для новой заметки (цвет фона, размер
+                шрифта и т.д.). Без аргументов работает как раньше —
+                `INSERT DEFAULT VALUES`, и SQLite подставит свои умолчания.
 
         Returns:
             ID созданной заметки
         """
+        unknown = set(fields) - NOTE_COLUMNS
+        if unknown:
+            raise ValueError("Неизвестные колонки заметки: %s" % ", ".join(sorted(unknown)))
+
+        if fields:
+            # Порядок колонок фиксируем сортировкой: иначе SQL и кортеж
+            # параметров собирались бы в произвольном порядке словаря.
+            columns = sorted(fields)
+            sql = "INSERT INTO notes (%s) VALUES (%s)" % (
+                ", ".join(columns),
+                ", ".join("?" for _ in columns),
+            )
+            params = tuple(fields[name] for name in columns)
+        else:
+            sql = "INSERT INTO notes DEFAULT VALUES"
+            params = ()
+
         with self._lock:
             try:
                 conn = self._ensure_conn()
-                cur = conn.execute("INSERT INTO notes DEFAULT VALUES")
+                cur = conn.execute(sql, params)
                 conn.commit()
                 return cur.lastrowid
             except sqlite3.Error as e:

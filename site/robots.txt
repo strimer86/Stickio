@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# Установщик — 33 МБ. Роботам он не нужен: страница скачивания и так
+# в обходе, а качать двоичный файл незачем.
+Disallow: /downloads/
+
+# Метки перехода не должны попадать в индекс как отдельные адреса:
+# иначе одна и та же страница собирается под десятком адресов.
+Disallow: /*?utm_
+Disallow: /*?yclid=
+Disallow: /*?gclid=
+Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&gclid
+
+Sitemap: https://stickio.tumioai.ru/sitemap.xml

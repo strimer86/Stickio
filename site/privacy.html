@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Политика конфиденциальности — Stickio</title>
+<meta name="description" content="Какие данные собирает Stickio и сайт stickio.tumioai.ru. Программа хранит заметки только на вашем компьютере и не отправляет их никуда.">
+<link rel="canonical" href="https://stickio.tumioai.ru/privacy.html">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#f5f4ef">
+<link rel="icon" href="/assets/stickio.ico" sizes="any">
+<style>
+:root{--ink:#1c2430;--muted:#5f6b76;--paper:#f5f4ef;--purple:#6657dd;--purple-dark:#4b3cc1;
+  --card:#fff;--line:#e0e4df}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:17px/1.68 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{width:min(760px,calc(100% - 40px));margin:auto}
+header{padding:18px 0}
+.brand{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:800;
+  letter-spacing:-.03em;text-decoration:none;color:inherit}
+.brand img{width:34px;height:34px}
+main{padding:30px 0 70px}
+h1{font-size:clamp(30px,4.4vw,44px);letter-spacing:-.04em;line-height:1.1;margin:0 0 10px}
+.date{color:var(--muted);font-size:15px;margin:0 0 36px}
+h2{font-size:22px;letter-spacing:-.02em;margin:38px 0 12px}
+p,li{color:#2c3742}
+ul{padding-left:22px;margin:12px 0}
+li{margin-bottom:7px}
+a{color:var(--purple-dark)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 26px;
+  margin:26px 0}
+.box p:last-child{margin-bottom:0}
+code{font:15px/1.5 ui-monospace,Consolas,monospace;background:#fff;border:1px solid var(--line);
+  border-radius:7px;padding:2px 7px}
+footer{padding:30px 0 60px;color:var(--muted);font-size:14.5px}
+footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <a class="brand" href="/"><img src="/assets/stickio.ico" width="34" height="34" alt=""><span>Stickio</span></a>
+</header>
+
+<main class="wrap">
+  <h1>Политика конфиденциальности</h1>
+  <p class="date">Обновлено 17 сентября 2026 года</p>
+
+  <div class="box">
+    <p><strong>Коротко:</strong> программа Stickio не собирает и не передаёт никаких данных.
+    Заметки хранятся только на вашем компьютере. Сайт не использует формы, не требует учётной
+    записи и не собирает персональные данные.</p>
+  </div>
+
+  <h2>Что делает программа</h2>
+  <ul>
+    <li>Заметки, их цвета, размеры и положение окон записываются в файл базы данных
+      <code>%LOCALAPPDATA%\Stickio\notes.db</code> на вашем компьютере.</li>
+    <li>Рядом автоматически создаются резервные копии базы. Они тоже остаются на вашем компьютере.</li>
+    <li>Программа не выходит в интернет: у неё нет ни отправки статистики, ни проверки обновлений,
+      ни учётной записи, ни облачной синхронизации.</li>
+    <li>Настройки (автозапуск, горячие клавиши, вид новой заметки) хранятся в системном реестре
+      Windows в разделе текущего пользователя.</li>
+    <li>Доступ к файлам за пределами своих папок программа не запрашивает.</li>
+  </ul>
+
+  <h2>Что происходит при удалении</h2>
+  <p>При удалении программы установщик спрашивает, стирать ли заметки. Если ответить «нет»,
+  база останется на диске, и её можно будет открыть позже. Если ответить «да», папка
+  <code>%LOCALAPPDATA%\Stickio</code> удаляется вместе с базой и резервными копиями.
+  Запись в автозапуске снимается в любом случае.</p>
+
+  <h2>Сайт</h2>
+  <ul>
+    <li>На сайте нет форм обратной связи, регистрации и комментариев — персональные данные
+      через него не передаются.</li>
+    <li>Для обезличенной статистики посещений может использоваться Яндекс.Метрика: она считает
+      просмотры страниц и переходы и не связывает посещение с личностью человека. Отключить её
+      можно блокировщиком рекламы или запретом сторонних скриптов в браузере.</li>
+    <li>Файлы cookie нужны только для этой статистики; для работы сайта они не требуются.</li>
+    <li>Сервер ведёт обычные журналы обращений (адрес страницы, время, тип браузера) — как любой
+      веб-сервер. Они нужны для защиты от сбоев и атак.</li>
+  </ul>
+
+  <h2>Скачивание установщика</h2>
+  <p>Установщик отдаётся напрямую с этого сайта. Контрольная сумма SHA-256 файла указана на
+  главной странице: по ней можно убедиться, что скачался именно тот файл, который выложен здесь,
+  а не подменённый.</p>
+
+  <h2>Изменения</h2>
+  <p>Если политика изменится, дата обновления вверху страницы изменится вместе с ней.</p>
+
+  <h2>Связь</h2>
+  <p>Вопросы по программе и по этой политике: <a href="https://stickio.tumioai.ru">stickio.tumioai.ru</a>.</p>
+</main>
+
+<footer class="wrap">
+  <span>© 2026 Т.Е.А.</span> · <a href="/">Главная</a>
+</footer>
+</body>
+</html>

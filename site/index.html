@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Stickio — заметки на рабочем столе Windows. Скачать бесплатно</title>
+<meta name="description" content="Stickio — бесплатная программа для заметок на рабочем столе Windows 10 и 11: стикеры поверх всех окон, горячие клавиши, поиск по заметкам, автосохранение. Без регистрации, рекламы и облака.">
+<link rel="canonical" href="https://stickio.tumioai.ru/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="author" content="Т.Е.А.">
+<meta name="theme-color" content="#f5f4ef">
+
+<!-- Подтверждение прав в поисковиках.
+     Код выдаёт сам поисковик при добавлении сайта — вставьте его сюда
+     и раскомментируйте строку. Без неё Яндекс.Вебмастер и Search Console
+     попросят положить файл в корень сайта; это тоже подходит. -->
+<!-- <meta name="yandex-verification" content="КОД_ИЗ_ЯНДЕКС_ВЕБМАСТЕРА"> -->
+<!-- <meta name="google-site-verification" content="КОД_ИЗ_SEARCH_CONSOLE"> -->
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Stickio">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="Stickio — заметки на рабочем столе Windows">
+<meta property="og:description" content="Бесплатные стикеры поверх всех окон: горячие клавиши, поиск, автосохранение. Всё хранится на вашем компьютере.">
+<meta property="og:url" content="https://stickio.tumioai.ru/">
+<meta property="og:image" content="https://stickio.tumioai.ru/assets/og-stickio.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Заметка Stickio на рабочем столе">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Stickio — заметки на рабочем столе Windows">
+<meta name="twitter:description" content="Бесплатные стикеры поверх всех окон: горячие клавиши, поиск, автосохранение.">
+<meta name="twitter:image" content="https://stickio.tumioai.ru/assets/og-stickio.png">
+
+<link rel="icon" href="/assets/stickio.ico" sizes="any">
+<link rel="apple-touch-icon" href="/assets/stickio.ico">
+<link rel="preload" as="image" href="/assets/screenshot-note.webp" type="image/webp" fetchpriority="high">
+
+<style>
+:root{
+  --ink:#1c2430; --muted:#5f6b76; --paper:#f5f4ef; --card:#ffffff;
+  --line:#e0e4df; --purple:#6657dd; --purple-dark:#4b3cc1; --green:#3f9c6d;
+  --mint:#b7efd8; --yellow:#fff4a8; --pink:#ffd0dc; --blue:#c9e6ff;
+  --shadow:0 18px 44px rgba(50,64,74,.13);
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+a{color:var(--purple-dark)}
+img{max-width:100%; height:auto; display:block}
+/* <picture> — не строчный, иначе под картинкой остаётся зазор строки */
+picture{display:block}
+h1,h2,h3{letter-spacing:-.03em; line-height:1.1; margin:0}
+h1{font-size:clamp(38px,5.4vw,64px); letter-spacing:-.05em}
+h2{font-size:clamp(28px,3.4vw,42px)}
+h3{font-size:20px; letter-spacing:-.02em}
+p{margin:0}
+:focus-visible{outline:3px solid var(--purple); outline-offset:3px; border-radius:6px}
+
+.wrap{width:min(1120px,calc(100% - 40px)); margin:auto}
+.skip{position:absolute; left:-9999px}
+.skip:focus{left:12px; top:12px; z-index:50; background:#fff; padding:10px 16px;
+  border-radius:10px; box-shadow:var(--shadow)}
+
+/* --- шапка ---------------------------------------------------------- */
+.top{display:flex; align-items:center; gap:18px; padding:16px 0}
+.brand{display:flex; align-items:center; gap:10px; font-size:21px; font-weight:800;
+  letter-spacing:-.03em; text-decoration:none; color:inherit}
+.brand img{width:34px; height:34px}
+.top nav{margin-left:auto; display:flex; gap:22px; font-size:15px; font-weight:600}
+.top nav a{text-decoration:none; color:var(--muted)}
+.top nav a:hover{color:var(--ink)}
+.top .button{margin-left:6px}
+@media (max-width:820px){
+  .top{flex-wrap:wrap; row-gap:12px}
+  .top nav{order:3; width:100%; margin-left:0; gap:16px;
+    font-size:14.5px; justify-content:space-between}
+}
+
+/* --- кнопки --------------------------------------------------------- */
+.button{
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  min-height:50px; padding:0 26px; border:0; border-radius:13px;
+  background:var(--purple); color:#fff; font:inherit; font-weight:700;
+  text-decoration:none; cursor:pointer;
+  box-shadow:0 10px 22px rgba(102,87,221,.24); transition:.18s;
+}
+.button:hover{background:var(--purple-dark); transform:translateY(-1px)}
+.button.small{min-height:42px; padding:0 18px; font-size:15px; border-radius:11px}
+.ghost{
+  display:inline-flex; align-items:center; min-height:42px; padding:0 16px;
+  background:transparent; border:1px solid var(--line); border-radius:11px;
+  color:var(--muted); font:inherit; font-size:15px; font-weight:600; cursor:pointer;
+}
+.ghost:hover{color:var(--ink); border-color:#c8cec8}
+
+/* --- общие блоки ---------------------------------------------------- */
+section{padding:84px 0}
+.eyebrow{display:inline-flex; align-items:center; gap:9px; color:var(--purple-dark);
+  font-weight:800; font-size:13px; letter-spacing:.08em; text-transform:uppercase}
+.eyebrow:before{content:""; width:8px; height:8px; border-radius:50%; background:var(--green)}
+.head{max-width:660px; margin-bottom:44px}
+.head h2{margin:14px 0 16px}
+.head p{color:var(--muted); font-size:18px}
+.lead{color:var(--muted); font-size:19px}
+
+/* --- первый экран --------------------------------------------------- */
+.hero{padding:56px 0 72px}
+.hero-grid{display:grid; grid-template-columns:1fr 1.05fr; gap:56px; align-items:center}
+.hero h1{margin:16px 0 22px}
+.hero .button{margin-top:30px}
+.meta{display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:18px;
+  color:var(--muted); font-size:14px}
+.meta span{display:inline-flex; align-items:center; gap:7px}
+.meta svg{width:15px; height:15px; flex:none; color:var(--green)}
+.shot{border-radius:var(--radius); box-shadow:var(--shadow); width:100%}
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:1fr; gap:38px}
+  .hero{padding:30px 0 50px}
+}
+
+/* --- возможности ---------------------------------------------------- */
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:26px 24px}
+.card h3{margin:14px 0 8px}
+.card p{color:var(--muted); font-size:15.5px}
+.icon{width:42px; height:42px; border-radius:12px; display:grid; place-items:center;
+  background:#efeaff; color:var(--purple-dark)}
+.icon svg{width:21px; height:21px}
+@media (max-width:900px){ .grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:620px){ .grid{grid-template-columns:1fr} }
+
+/* --- демонстрация --------------------------------------------------- */
+.demo{background:#fff}
+.desk{
+  position:relative; height:392px; border-radius:20px; overflow:hidden;
+  background:linear-gradient(150deg,#e7edfa,#f4f2ec 60%,#eef3ee);
+  border:1px solid var(--line); touch-action:none;
+}
+/* На узком экране заметки в демонстрации стоят в столбик (см. defaultNotes
+   в скрипте), поэтому стол должен быть выше — иначе третья уедет за край.
+   Правило идёт ПОСЛЕ .desk: медиазапрос выше по файлу проиграл бы по
+   порядку, хотя выглядел бы логичнее.
+
+   Порог 739px согласован со скриптом: он считает экран узким, когда стол
+   уже 700px, а стол — это ширина страницы минус 40px отступов. Разойдись
+   эти два числа, заметки встали бы в столбик внутри низкого стола. */
+@media (max-width:739px){ .desk{height:570px} }
+.desk-hint{
+  position:absolute; left:0; right:0; bottom:14px; text-align:center;
+  color:var(--muted); font-size:13.5px; pointer-events:none;
+}
+.note{
+  position:absolute; width:230px; border-radius:10px; padding:10px 12px 12px;
+  box-shadow:0 12px 26px rgba(50,64,74,.22); cursor:grab;
+  display:flex; flex-direction:column; gap:6px;
+  animation:pop .22s ease-out;
+}
+.note.dragging{cursor:grabbing; box-shadow:0 20px 38px rgba(50,64,74,.3)}
+@keyframes pop{from{opacity:0; transform:scale(.94)} to{opacity:1; transform:scale(1)}}
+.note-head{display:flex; align-items:center; gap:6px; height:18px}
+.grip{display:flex; gap:3px; color:rgba(0,0,0,.42)}
+.grip i{width:3px; height:3px; border-radius:50%; background:currentColor}
+.note-head .spacer{margin-left:auto}
+.note button{
+  width:20px; height:20px; padding:0; border:0; border-radius:6px; cursor:pointer;
+  background:transparent; color:rgba(0,0,0,.5); font:14px/1 inherit; font-weight:700;
+}
+.note button:hover{background:rgba(0,0,0,.09); color:#000}
+.note-text{outline:none; font-size:14.5px; line-height:1.42; min-height:74px;
+  white-space:pre-wrap; word-break:break-word}
+.note-text:empty:before{content:attr(data-ph); color:rgba(0,0,0,.34)}
+.desk-bar{display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:20px}
+.desk-bar .hint{color:var(--muted); font-size:14.5px}
+kbd{font:600 13px/1 ui-monospace,Consolas,monospace; background:#fff;
+  border:1px solid var(--line); border-bottom-width:2px; border-radius:6px; padding:4px 7px}
+
+/* --- галерея -------------------------------------------------------- */
+.shots{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; align-items:start}
+.shots figure{margin:0; background:var(--card); border:1px solid var(--line);
+  border-radius:var(--radius); padding:12px}
+.shots a{display:block; border-radius:10px; overflow:hidden}
+.shots img{border-radius:10px; transition:.2s}
+.shots a:hover img{transform:scale(1.02)}
+.shots figcaption{color:var(--muted); font-size:14px; padding:12px 4px 2px}
+@media (max-width:900px){ .shots{grid-template-columns:1fr} }
+
+/* --- шаги и требования ---------------------------------------------- */
+.steps{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; counter-reset:s}
+.step{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:26px 24px}
+.step .num{font-weight:800; font-size:14px; color:var(--purple-dark); letter-spacing:.06em}
+.step h3{margin:12px 0 8px}
+.step p{color:var(--muted); font-size:15.5px}
+@media (max-width:820px){ .steps{grid-template-columns:1fr} }
+.specs{margin:36px 0 0; padding:0; list-style:none; display:grid;
+  grid-template-columns:repeat(2,1fr); gap:10px 30px}
+.specs li{display:flex; gap:10px; color:var(--muted); font-size:15.5px}
+.specs b{color:var(--ink); font-weight:600; min-width:150px}
+@media (max-width:620px){ .specs{grid-template-columns:1fr} }
+
+/* --- вопросы -------------------------------------------------------- */
+.faq{max-width:820px}
+.faq details{background:var(--card); border:1px solid var(--line); border-radius:14px;
+  margin-bottom:12px; overflow:hidden}
+.faq summary{cursor:pointer; padding:20px 22px; font-weight:650; font-size:17.5px;
+  list-style:none; display:flex; align-items:center; gap:14px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:after{content:"+"; margin-left:auto; color:var(--purple);
+  font-size:24px; font-weight:400; line-height:1}
+.faq details[open] summary:after{content:"–"}
+.faq .answer{padding:0 22px 22px; color:var(--muted)}
+.faq .answer p+p{margin-top:10px}
+
+/* --- скачивание ----------------------------------------------------- */
+.download{background:var(--ink); color:#fff; border-radius:24px; padding:52px;
+  display:grid; grid-template-columns:1fr auto; gap:34px; align-items:center}
+.download h2{color:#fff}
+.download p{color:#b9c2cc; margin-top:12px; max-width:520px}
+.download .meta{color:#98a3ae}
+.hash{margin-top:22px; font:13px/1.6 ui-monospace,Consolas,monospace; color:#8f9aa5;
+  word-break:break-all; max-width:38ch}
+.hash b{color:#c9d2dc; font-weight:600}
+.download .button{background:#fff; color:var(--ink); box-shadow:none; white-space:nowrap}
+.download .button:hover{background:#e9ecf0}
+@media (max-width:820px){ .download{grid-template-columns:1fr; padding:34px} }
+
+/* --- подвал --------------------------------------------------------- */
+.footer{padding:40px 0 56px; color:var(--muted); font-size:14.5px}
+.footer .row{display:flex; flex-wrap:wrap; gap:10px 26px; align-items:center}
+.footer a{color:var(--muted)}
+.footer a:hover{color:var(--ink)}
+.footer .sep{margin-left:auto}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation:none !important; transition:none !important}
+}
+</style>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://stickio.tumioai.ru/#site",
+      "url": "https://stickio.tumioai.ru/",
+      "name": "Stickio",
+      "inLanguage": "ru",
+      "publisher": {"@id": "https://stickio.tumioai.ru/#author"}
+    },
+    {
+      "@type": "Person",
+      "@id": "https://stickio.tumioai.ru/#author",
+      "name": "Т.Е.А.",
+      "url": "https://stickio.tumioai.ru/"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://stickio.tumioai.ru/#app",
+      "name": "Stickio",
+      "alternateName": "Стикио — заметки на рабочем столе",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Заметки и стикеры",
+      "operatingSystem": "Windows 10, Windows 11",
+      "softwareVersion": "1.0.1",
+      "softwareRequirements": "Windows 10 или Windows 11, 64-разрядная система",
+      "fileSize": "33.4MB",
+      "inLanguage": "ru",
+      "isAccessibleForFree": true,
+      "downloadUrl": "https://stickio.tumioai.ru/downloads/Stickio_Setup_1.0.1.exe",
+      "installUrl": "https://stickio.tumioai.ru/downloads/Stickio_Setup_1.0.1.exe",
+      "url": "https://stickio.tumioai.ru/",
+      "author": {"@id": "https://stickio.tumioai.ru/#author"},
+      "publisher": {"@id": "https://stickio.tumioai.ru/#author"},
+      "description": "Бесплатная программа для заметок на рабочем столе Windows: стикеры поверх всех окон, настраиваемые горячие клавиши, поиск по всем заметкам, автосохранение, экспорт и импорт. Данные хранятся только на компьютере пользователя.",
+      "screenshot": [
+        "https://stickio.tumioai.ru/assets/screenshot-note.png",
+        "https://stickio.tumioai.ru/assets/screenshot-settings.png",
+        "https://stickio.tumioai.ru/assets/screenshot-search.png"
+      ],
+      "featureList": [
+        "Стикеры поверх всех окон",
+        "Настраиваемые горячие клавиши",
+        "Поиск по всем заметкам с подсветкой",
+        "Автосохранение при наборе текста",
+        "12 цветов фона и настройка размера шрифта",
+        "Экспорт заметок в JSON и HTML, импорт обратно",
+        "Значок в системном трее",
+        "Запуск вместе с Windows"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "RUB",
+        "availability": "https://schema.org/InStock"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://stickio.tumioai.ru/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Stickio действительно бесплатная?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Да. Программа бесплатна целиком: нет платных версий, подписки, рекламы и регистрации. Учётная запись не нужна, интернет для работы не требуется."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Где хранятся заметки?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Только на вашем компьютере, в файле %LOCALAPPDATA%\\Stickio\\notes.db. Заметки никуда не отправляются, облака и синхронизации нет. Рядом автоматически создаются резервные копии."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Заметки пропадут при выключении компьютера?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Нет. Текст сохраняется сам, пока вы печатаете, и запись не теряется при закрытии программы или перезагрузке."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Нужны права администратора для установки?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Нет. В установщике можно выбрать установку для одного пользователя — тогда программа встанет в личную папку и права администратора не понадобятся."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Можно перенести заметки на другой компьютер?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Да. В меню значка в трее есть экспорт заметок в файл JSON или HTML и импорт из него. Есть и копия базы целиком."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Антивирус насторожился при первом запуске. Это опасно?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Нет. Программа не подписана платным сертификатом, поэтому антивирусы иногда проверяют её внимательнее обычного. Файл установщика можно сверить по контрольной сумме SHA-256, указанной на этой странице, или проверить на VirusTotal."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Есть версия для macOS или Linux?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Нет, Stickio работает только в Windows 10 и Windows 11."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Как удалить Stickio?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Как обычную программу: «Параметры» → «Приложения» → «Установленные приложения» → Stickio → «Удалить». При удалении спросят, стирать ли заметки."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+
+<body>
+<a class="skip" href="#main">Перейти к содержанию</a>
+
+<header class="top wrap">
+  <a class="brand" href="/">
+    <img src="/assets/stickio.ico" width="34" height="34" alt="">
+    <span>Stickio</span>
+  </a>
+  <nav aria-label="Основные разделы">
+    <a href="#features">Возможности</a>
+    <a href="#demo">Демо</a>
+    <a href="#shots">Скриншоты</a>
+    <a href="#faq">Вопросы</a>
+  </nav>
+  <a class="button small" href="#download">Скачать</a>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">Для Windows 10 и 11</span>
+        <h1>Заметки на рабочем столе — всегда под рукой</h1>
+        <p class="lead">
+          Stickio — бесплатная программа для заметок. Запишите мысль за секунду:
+          стикер останется поверх окон, а текст сохранится сам.
+        </p>
+        <a class="button" href="#download">
+          Скачать бесплатно
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13M6 11l6 6 6-6M4 21h16"/></svg>
+        </a>
+        <div class="meta">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>Версия 1.0.1</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>33,4 МБ</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>Без регистрации</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>Бесплатно</span>
+        </div>
+      </div>
+      <picture>
+        <source srcset="/assets/screenshot-note.webp" type="image/webp">
+        <img class="shot" src="/assets/screenshot-note.png" width="880" height="620"
+             fetchpriority="high" decoding="async"
+             alt="Заметки Stickio на рабочем столе Windows: план на день и напоминание о встрече">
+      </picture>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Всё нужное — без перегруза</span>
+        <h2>Заметки, которые не мешают работать</h2>
+        <p>Ни лент, ни досок, ни подписок. Только стикеры, которые лежат там, где вы их оставили.</p>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div>
+          <h3>Новая заметка за секунду</h3>
+          <p>Нажмите Ctrl+Shift+N в любой программе — стикер появится сразу, не переключая окна.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg></div>
+          <h3>Поверх всех окон</h3>
+          <p>Заметка не прячется за браузером и редактором: список дел виден, пока вы работаете.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg></div>
+          <h3>Поиск по всем заметкам</h3>
+          <p>Ctrl+Shift+F находит нужную запись среди десятков стикеров и подсвечивает совпадения. Поддерживаются регулярные выражения.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20s2-9 8-9 8 9 8 9"/><circle cx="12" cy="6" r="3"/></svg></div>
+          <h3>Свой вид у каждой заметки</h3>
+          <p>Двенадцать цветов фона, цвета текста, размер шрифта и ширина стикера — под задачу и настроение.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 4v5h-5"/></svg></div>
+          <h3>Автосохранение</h3>
+          <p>Текст записывается сам, пока вы печатаете. Забыть нажать «Сохранить» невозможно.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Данные только у вас</h3>
+          <p>Заметки лежат в локальном файле на вашем компьютере. Ни облака, ни учётной записи, ни интернета.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 19h16"/></svg></div>
+          <h3>Экспорт и перенос</h3>
+          <p>Сохраните все заметки в JSON или HTML и перенесите на другой компьютер вместе с базой.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="17" cy="15.5" r="1.8"/></svg></div>
+          <h3>Живёт в трее</h3>
+          <p>Значок рядом с часами: создать заметку, показать все сразу, открыть настройки или выйти.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v8"/><path d="M6.5 7.5a7 7 0 1011 0"/></svg></div>
+          <h3>Запуск с Windows</h3>
+          <p>Одна галочка в настройках — и стикеры на месте сразу после включения компьютера.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="demo" class="demo">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Попробуйте прямо здесь</span>
+        <h2>Как это выглядит в работе</h2>
+        <p>Настоящая заметка Stickio — только не на рабочем столе, а внутри страницы. Перетащите её за верхний край, напишите текст, щёлкните дважды по заголовку, чтобы сменить цвет.</p>
+      </div>
+
+      <div class="desk" id="desk">
+        <div class="desk-hint">Потяните заметку · двойной щелчок — следующий цвет · крестик — удалить</div>
+      </div>
+
+      <div class="desk-bar">
+        <button class="button" type="button" id="add-note">Новая заметка</button>
+        <span class="hint">или нажмите <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> — в самой программе это сочетание по умолчанию</span>
+        <button class="ghost" type="button" id="reset-desk">Вернуть как было</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="shots">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Без обмана</span>
+        <h2>Скриншоты программы</h2>
+        <p>Это снимки настоящего окна Stickio, а не рисунки. Ровно то, что вы увидите после установки.</p>
+      </div>
+
+      <div class="shots">
+        <figure>
+          <a href="/assets/screenshot-note.png" target="_blank" rel="noopener">
+            <picture>
+              <source srcset="/assets/screenshot-note.webp" type="image/webp">
+              <img src="/assets/screenshot-note.png" width="880" height="620" loading="lazy"
+                   decoding="async" alt="Заметки Stickio на рабочем столе Windows: план на день и напоминание о встрече">
+            </picture>
+          </a>
+          <figcaption>Стикеры на рабочем столе: цвет, размер и текст настраиваются отдельно для каждой заметки.</figcaption>
+        </figure>
+        <figure>
+          <a href="/assets/screenshot-settings.png" target="_blank" rel="noopener">
+            <picture>
+              <source srcset="/assets/screenshot-settings.webp" type="image/webp">
+              <img src="/assets/screenshot-settings.png" width="880" height="620" loading="lazy"
+                   decoding="async" alt="Окно настроек Stickio: автозапуск с Windows, горячие клавиши, вид новой заметки">
+            </picture>
+          </a>
+          <figcaption>Настройки: автозапуск, горячие клавиши и вид новых заметок.</figcaption>
+        </figure>
+        <figure>
+          <a href="/assets/screenshot-search.png" target="_blank" rel="noopener">
+            <picture>
+              <source srcset="/assets/screenshot-search.webp" type="image/webp">
+              <img src="/assets/screenshot-search.png" width="880" height="620" loading="lazy"
+                   decoding="async" alt="Поиск по заметкам в Stickio с подсветкой найденного текста">
+            </picture>
+          </a>
+          <figcaption>Поиск по всем заметкам с подсветкой совпадений.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Начать просто</span>
+        <h2>Три шага — и можно записывать</h2>
+      </div>
+
+      <div class="steps">
+        <article class="step">
+          <span class="num">01</span>
+          <h3>Скачайте установщик</h3>
+          <p>Один файл, 33,4 МБ. Windows может показать предупреждение о неизвестном издателе — нажмите «Подробнее» → «Выполнить в любом случае».</p>
+        </article>
+        <article class="step">
+          <span class="num">02</span>
+          <h3>Установите</h3>
+          <p>Мастер предложит выбрать: для всех пользователей или только для вас. Во втором случае права администратора не нужны.</p>
+        </article>
+        <article class="step">
+          <span class="num">03</span>
+          <h3>Нажмите Ctrl+Shift+N</h3>
+          <p>Появится первый стикер. Сочетания можно поменять в настройках, а программу — убрать в трей.</p>
+        </article>
+      </div>
+
+      <ul class="specs">
+        <li><b>Система</b><span>Windows 10 или Windows 11, 64-разрядная</span></li>
+        <li><b>Место на диске</b><span>около 130 МБ</span></li>
+        <li><b>Права администратора</b><span>не обязательны</span></li>
+        <li><b>Интернет</b><span>не нужен — программа работает офлайн</span></li>
+        <li><b>Язык интерфейса</b><span>русский</span></li>
+        <li><b>Цена</b><span>бесплатно, без рекламы и подписки</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Частые вопросы</span>
+        <h2>Вопросы и ответы</h2>
+      </div>
+
+      <div class="faq">
+        <details>
+          <summary>Stickio действительно бесплатная?</summary>
+          <div class="answer"><p>Да. Программа бесплатна целиком: нет платных версий, подписки, рекламы и регистрации. Учётная запись не нужна, интернет для работы не требуется.</p></div>
+        </details>
+        <details>
+          <summary>Где хранятся заметки?</summary>
+          <div class="answer"><p>Только на вашем компьютере, в файле <code>%LOCALAPPDATA%\Stickio\notes.db</code>. Заметки никуда не отправляются, облака и синхронизации нет. Рядом автоматически создаются резервные копии базы.</p></div>
+        </details>
+        <details>
+          <summary>Заметки пропадут при выключении компьютера?</summary>
+          <div class="answer"><p>Нет. Текст сохраняется сам, пока вы печатаете, и не теряется при закрытии программы или перезагрузке.</p></div>
+        </details>
+        <details>
+          <summary>Нужны права администратора для установки?</summary>
+          <div class="answer"><p>Нет. В установщике можно выбрать установку для одного пользователя — тогда программа встанет в личную папку и права администратора не понадобятся.</p></div>
+        </details>
+        <details>
+          <summary>Можно перенести заметки на другой компьютер?</summary>
+          <div class="answer"><p>Да. В меню значка в трее есть экспорт заметок в файл JSON или HTML и импорт из него. Есть и копия базы целиком.</p></div>
+        </details>
+        <details>
+          <summary>Антивирус насторожился при первом запуске. Это опасно?</summary>
+          <div class="answer"><p>Нет. Программа не подписана платным сертификатом, поэтому антивирусы иногда проверяют её внимательнее обычного. Установщик можно сверить по контрольной сумме SHA-256, указанной ниже, или проверить на VirusTotal.</p></div>
+        </details>
+        <details>
+          <summary>Есть версия для macOS или Linux?</summary>
+          <div class="answer"><p>Нет, Stickio работает только в Windows 10 и Windows 11.</p></div>
+        </details>
+        <details>
+          <summary>Как удалить Stickio?</summary>
+          <div class="answer"><p>Как обычную программу: «Параметры» → «Приложения» → «Установленные приложения» → Stickio → «Удалить». При удалении спросят, стирать ли заметки.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="download">
+        <div>
+          <h2>Начните с первой заметки</h2>
+          <p>Stickio 1.0.1 для Windows 10 и 11. Установщик, 33,4 МБ. Бесплатно и без регистрации.</p>
+          <div class="meta">
+            <span>Windows 10/11 · 64-бит</span>
+            <span>Права администратора не нужны</span>
+          </div>
+          <p class="hash"><b>SHA-256:</b> 523553881c31c83658cab897dd1160c2fbfd58218c292be5d8086bb7a9f7a40e</p>
+        </div>
+        <a class="button" href="/downloads/Stickio_Setup_1.0.1.exe" download>
+          Скачать установщик
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13M6 11l6 6 6-6M4 21h16"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap row">
+    <span>© 2026 Т.Е.А.</span>
+    <a href="https://stickio.tumioai.ru">stickio.tumioai.ru</a>
+    <a href="/privacy.html">Политика конфиденциальности</a>
+    <span class="sep">Заметки хранятся на вашем компьютере</span>
+  </div>
+</footer>
+
+<script>
+// Демонстрация заметок. Без библиотек: страница должна открываться мгновенно
+// и работать, даже если внешние скрипты не загрузятся.
+(function () {
+  "use strict";
+
+  var desk = document.getElementById("desk");
+  if (!desk) return;
+
+  // Палитра фона — та же, что в самой программе (widgets/color_picker.py),
+  // чтобы демонстрация не обещала цветов, которых в Stickio нет.
+  var COLORS = ["#FFF4A8", "#FDE66C", "#FFC49B", "#FFB3D9",
+                "#E4B3FF", "#A8E6CF", "#A8D8FF", "#FFFFFF"];
+  var STORE = "stickio-demo";
+  var WIDTH = 230;
+
+  function defaultNotes() {
+    // Раскладка зависит от ширины стола. На телефоне стол — около 350 px,
+    // три заметки по 230 px в ряд там не помещаются и наложились бы друг
+    // на друга, поэтому на узком экране ставим их в столбик.
+    if (desk.clientWidth < 700) {
+      var left = Math.max(12, Math.round((desk.clientWidth - WIDTH) / 2));
+      return [
+        {x: left, y: 14,  c: 0, t: "На сегодня\nПозвонить в сервис\nКупить корм коту"},
+        {x: left, y: 182, c: 5, t: "Идея\nНе терять важные мысли — записывать сразу"},
+        {x: left, y: 350, c: 3, t: "Пятница, 15:00\nВстреча\nПодготовить вопросы"}
+      ];
+    }
+    return [
+      {x: 34,  y: 34, c: 0, t: "На сегодня\nПозвонить в сервис\nКупить корм коту\nОтправить отчёт"},
+      {x: 400, y: 96, c: 5, t: "Идея\nНе терять важные мысли — записывать сразу"},
+      {x: 766, y: 44, c: 3, t: "Пятница, 15:00\nВстреча\nПодготовить вопросы"}
+    ];
+  }
+
+  var notes = load();
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE);
+      if (!raw) return defaultNotes();
+      var data = JSON.parse(raw);
+      if (!Array.isArray(data) || !data.length) return defaultNotes();
+      return data;
+    } catch (e) {
+      return defaultNotes();
+    }
+  }
+
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(notes)); } catch (e) {}
+  }
+
+  function maxX() {
+    return Math.max(40, desk.clientWidth - WIDTH - 16);
+  }
+
+  function maxY() {
+    return Math.max(40, desk.clientHeight - 150);
+  }
+
+  function draw() {
+    desk.innerHTML = '<div class="desk-hint">Потяните заметку · двойной щелчок — '
+      + 'следующий цвет · крестик — удалить</div>';
+    notes.forEach(function (note, index) {
+      desk.appendChild(build(note, index));
+    });
+  }
+
+  function build(note, index) {
+    note.x = Math.min(Math.max(0, note.x), maxX());
+    note.y = Math.min(Math.max(0, note.y), maxY());
+
+    var el = document.createElement("div");
+    el.className = "note";
+    el.style.left = note.x + "px";
+    el.style.top = note.y + "px";
+    el.style.background = COLORS[note.c % COLORS.length];
+    el.dataset.index = index;
+
+    var head = document.createElement("div");
+    head.className = "note-head";
+    head.innerHTML = '<span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>';
+
+    var add = document.createElement("button");
+    add.type = "button";
+    add.textContent = "+";
+    add.title = "Ещё заметка";
+    add.setAttribute("aria-label", "Добавить заметку");
+    add.addEventListener("click", function (event) {
+      event.stopPropagation();
+      addNote(note.x + 26, note.y + 26);
+    });
+
+    var close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "×";
+    close.title = "Удалить заметку";
+    close.setAttribute("aria-label", "Удалить заметку");
+    close.addEventListener("click", function (event) {
+      event.stopPropagation();
+      notes.splice(index, 1);
+      save();
+      draw();
+    });
+
+    var spacer = document.createElement("span");
+    spacer.className = "spacer";
+    head.appendChild(spacer);
+    head.appendChild(add);
+    head.appendChild(close);
+
+    var text = document.createElement("div");
+    text.className = "note-text";
+    text.contentEditable = "true";
+    text.spellcheck = false;
+    text.dataset.ph = "Что-нибудь важное…";
+    text.textContent = note.t;
+    text.addEventListener("input", function () {
+      note.t = text.textContent;
+      save();
+    });
+    // Заголовок не должен утаскивать каретку: правки текста — это правки
+    // заметки, а не перетаскивание окна.
+    text.addEventListener("pointerdown", function (event) {
+      event.stopPropagation();
+    });
+
+    el.appendChild(head);
+    el.appendChild(text);
+
+    el.addEventListener("dblclick", function () {
+      note.c = (note.c + 1) % COLORS.length;
+      el.style.background = COLORS[note.c % COLORS.length];
+      save();
+    });
+
+    startDrag(el, head, note);
+    return el;
+  }
+
+  function startDrag(el, handle, note) {
+    var shiftX = 0, shiftY = 0, active = false;
+
+    handle.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      active = true;
+      el.classList.add("dragging");
+      var box = el.getBoundingClientRect();
+      shiftX = event.clientX - box.left;
+      shiftY = event.clientY - box.top;
+      handle.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", function (event) {
+      if (!active) return;
+      var box = desk.getBoundingClientRect();
+      note.x = Math.min(Math.max(0, event.clientX - box.left - shiftX), maxX());
+      note.y = Math.min(Math.max(0, event.clientY - box.top - shiftY), maxY());
+      el.style.left = note.x + "px";
+      el.style.top = note.y + "px";
+    });
+
+    function stop(event) {
+      if (!active) return;
+      active = false;
+      el.classList.remove("dragging");
+      if (handle.hasPointerCapture && handle.hasPointerCapture(event.pointerId)) {
+        handle.releasePointerCapture(event.pointerId);
+      }
+      save();
+    }
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  }
+
+  function addNote(x, y) {
+    if (notes.length >= 12) return;
+    notes.push({
+      x: typeof x === "number" ? x : 40 + notes.length * 22,
+      y: typeof y === "number" ? y : 30 + notes.length * 18,
+      c: notes.length % COLORS.length,
+      t: ""
+    });
+    save();
+    draw();
+    var last = desk.querySelectorAll(".note-text");
+    if (last.length) last[last.length - 1].focus();
+  }
+
+  document.getElementById("add-note").addEventListener("click", function () {
+    addNote();
+  });
+
+  document.getElementById("reset-desk").addEventListener("click", function () {
+    notes = defaultNotes();
+    save();
+    draw();
+  });
+
+  // То же сочетание, что в программе по умолчанию. Браузеры вправе
+  // перехватить его раньше страницы (в Chrome это режим инкогнито), поэтому
+  // кнопка «Новая заметка» остаётся основным способом.
+  document.addEventListener("keydown", function (event) {
+    if (event.ctrlKey && event.shiftKey && (event.key === "N" || event.key === "n")) {
+      event.preventDefault();
+      addNote();
+    }
+  });
+
+  var resizeTimer = null;
+  var wasNarrow = desk.clientWidth < 700;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      var narrow = desk.clientWidth < 700;
+      // Пересекли границу «узко / широко» — прежняя раскладка не годится
+      // (в столбик заметки не влезут в ряд и наоборот), возвращаем исходную.
+      if (narrow !== wasNarrow) {
+        wasNarrow = narrow;
+        notes = defaultNotes();
+        save();
+      }
+      draw();
+    }, 200);
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+Stickio — сайт stickio.tumioai.ru
+=================================
+
+Что в этой папке
+----------------
+
+  index.html                     главная страница
+  privacy.html                   политика конфиденциальности
+  404.html                       страница «не найдено»
+  robots.txt                     указания поисковым роботам
+  sitemap.xml                    список страниц для индексации
+  favicon.ico                    значок сайта в корне (браузеры просят именно его)
+  b3c2382811680ec6fe3687077f92b2f8.txt   ключ IndexNow — имя файла и есть ключ
+  stickio.tumioai.ru.conf        конфигурация nginx
+  assets/stickio.ico             значок приложения
+  assets/og-stickio.png          картинка предпросмотра ссылки, 1200x630
+  assets/screenshot-note.png     снимки настоящих окон программы, 880x620
+  assets/screenshot-settings.png
+  assets/screenshot-search.png
+  assets/*.webp                  те же снимки в WebP — их отдают браузеру
+                                 вместо PNG, они в 2-7 раз легче
+                                 (снимок рабочего стола: 78 КБ -> 12 КБ).
+                                 PNG остаются запасным вариантом, поэтому
+                                 удалять их нельзя.
+
+Каталог downloads/ на сервере должен существовать отдельно — в него
+кладётся установщик, в эту папку он не входит (33 МБ).
+
+
+Как пересобрать картинки
+------------------------
+
+Снимки окон и картинка предпросмотра — не рисунки, а рендер настоящих
+окон программы. Если поменяется интерфейс, их надо пересобрать, иначе
+на сайте останется старое окно:
+
+  <python 3.11> tools\make_site_screenshots.py   # три снимка, PNG и WebP
+  <python 3.11> tools\make_og_image.py           # картинка предпросмотра
+
+Первый скрипт сам обновляет и .webp рядом с .png — отдельной команды
+для этого не нужно.
+
+
+Как выложить
+------------
+
+Одной командой с компьютера (подставьте свой адрес сервера):
+
+  rsync -av --delete \
+    --exclude downloads \
+    C:/Users/Master/PycharmProjects/Stiker/site/ \
+    root@5.44.40.47:/var/www/stickio.tumioai.ru/
+
+Без rsync — обычным scp:
+
+  scp -r site/* root@5.44.40.47:/var/www/stickio.tumioai.ru/
+
+Потом на сервере права на чтение:
+
+  sudo chown -R www-data:www-data /var/www/stickio.tumioai.ru
+  sudo find /var/www/stickio.tumioai.ru -type d -exec chmod 755 {} \;
+  sudo find /var/www/stickio.tumioai.ru -type f -exec chmod 644 {} \;
+
+Свежий установщик положить в downloads (на сервере версия от 17.09 была
+старше — 35 047 982 байта вместо 35 047 986):
+
+  scp dist/Stickio_Setup_1.0.1.exe \
+      root@5.44.40.47:/var/www/stickio.tumioai.ru/downloads/
+
+
+Конфигурация nginx
+------------------
+
+  sudo cp /etc/nginx/sites-available/stickio.tumioai.ru{,.bak}
+  sudo cp stickio.tumioai.ru.conf /etc/nginx/sites-available/stickio.tumioai.ru
+  sudo nginx -t && sudo systemctl reload nginx
+
+Если nginx -t ругается на ssl_certificate — значит сертификат лежит не там,
+где указано в файле. Посмотрите свой прежний конфиг (он сохранён в .bak)
+и подставьте те же пути.
+
+Что даёт новый конфиг: сжатие gzip, кэш статики на 30 дней, HTTP/2,
+своя страница 404, запрет встраивания сайта в чужой iframe.
+
+
+Яндекс.Вебмастер
+----------------
+
+1. Открыть https://webmaster.yandex.ru и добавить сайт stickio.tumioai.ru.
+2. Подтвердить право: проще всего файлом — Вебмастер даст имя вида
+   yandex_1a2b3c4d5e6f.html, положить его в корень сайта. Либо взять код
+   из «Метатега» и вставить в index.html вместо строки
+   <meta name="yandex-verification" ...> — она там уже есть, закомментирована.
+3. «Индексирование» → «Файлы Sitemap» → добавить
+   https://stickio.tumioai.ru/sitemap.xml
+4. «Индексирование» → «Переобход страниц» → отправить главную.
+5. Проверить, что robots.txt и sitemap.xml открываются в браузере.
+
+Метрика (по желанию, но для Яндекса полезна):
+6. https://metrika.yandex.ru → добавить счётчик → вставить код перед </head>
+   в index.html. После этого в privacy.html ничего менять не нужно: там уже
+   сказано, что статистика может использоваться.
+
+
+Google Search Console
+---------------------
+
+1. Открыть https://search.google.com/search-console → «Добавить ресурс» →
+   «Префикс URL» → https://stickio.tumioai.ru/
+2. Подтвердить: HTML-файлом (положить в корень) или метатегом — строка
+   <meta name="google-site-verification" ...> в index.html ждёт код.
+3. «Файлы Sitemap» → добавить sitemap.xml
+4. «Проверка URL» → вставить адрес главной → «Запросить индексирование».
+
+Скорость: страница проверяется в https://pagespeed.web.dev — там же видно,
+что мешает на телефонах.
+
+
+Ускорить индексацию (IndexNow)
+------------------------------
+
+Ключ уже лежит в корне (b3c2382811680ec6fe3687077f92b2f8.txt). После
+выкладки отправьте адреса одной командой — Яндекс и Bing узнают о странице
+сразу, не дожидаясь обхода:
+
+  curl -X POST https://api.indexnow.org/indexnow \
+    -H "Content-Type: application/json; charset=utf-8" \
+    -d '{"host":"stickio.tumioai.ru",
+         "key":"b3c2382811680ec6fe3687077f92b2f8",
+         "keyLocation":"https://stickio.tumioai.ru/b3c2382811680ec6fe3687077f92b2f8.txt",
+         "urlList":["https://stickio.tumioai.ru/",
+                    "https://stickio.tumioai.ru/privacy.html"]}'
+
+Ответ 200 или 202 — принято. Повторять при каждом обновлении сайта.
+
+
+Проверка после выкладки
+-----------------------
+
+  curl -sI https://stickio.tumioai.ru/robots.txt        # 200
+  curl -sI https://stickio.tumioai.ru/sitemap.xml       # 200
+  curl -sI https://stickio.tumioai.ru/favicon.ico       # 200
+  curl -sI https://stickio.tumioai.ru/privacy.html      # 200
+  curl -sI https://stickio.tumioai.ru/нет-такой         # 404 + страница сайта
+  curl -sI https://stickio.tumioai.ru/assets/og-stickio.png  # 200
+  curl -s  https://stickio.tumioai.ru/ | grep -c canonical   # 1
+  curl -sI http://stickio.tumioai.ru/ | head -1         # 301 на https
+  curl -s https://stickio.tumioai.ru/ | grep -o 'application/ld+json' # есть разметка
+
+Проверка разметки для поисковиков:
+  https://validator.schema.org/#url=https%3A%2F%2Fstickio.tumioai.ru%2F
+  https://webmaster.yandex.ru/tools/microtest/
+  https://search.google.com/test/rich-results
+
+Картинка предпросмотра ссылки: https://vk.com/dev/pages_preview или
+отправить ссылку себе в Telegram — превью должно быть с картинкой 1200x630.
+
+
+Что важно понимать про «топ-1»
+------------------------------
+
+Технически сайт после этой выкладки готов к индексации: роботы получат
+robots.txt и sitemap, страница отдаётся по одному адресу, быстро грузится
+и содержит разметку о программе. Но место в выдаче техника не покупает.
+
+Что реально влияет дальше:
+  * Возраст сайта и постоянство: новый домен Яндекс и Google держат
+    «на карантине» несколько недель, пока не убедятся, что сайт живой.
+  * Ссылки. Одна ссылка с крупного каталога (Softportal, Softpedia,
+    «Софт для Windows», профиль на GitHub, пост на Habr) даёт больше,
+    чем любые правки в метатегах.
+  * Поведение: люди приходят, остаются, скачивают. Для Яндекса это
+    считается в том числе по Метрике.
+  * Свежесть: обновления программы с новыми версиями на странице.
+
+Конкуренты по запросу «заметки на рабочем столе» — старые сайты с
+десятками ссылок. Обогнать их за неделю нельзя, но по длинным запросам
+(«заметки на рабочем столе windows 11 бесплатно», «программа стикеры
+поверх окон», «чем заменить записки windows») шансы хорошие уже скоро.

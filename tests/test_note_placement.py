@@ -9,18 +9,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from PySide6.QtCore import QCoreApplication, QRect
+from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QApplication
 
-import services.settings as settings_module
-
-settings_module.ORG_NAME = "StickioTest"
-settings_module.APP_NAME = "NotePlacementTests"
-
-from database.database import Database  # noqa: E402
-from services.note_manager import (  # noqa: E402
+from database.database import Database
+from services.note_manager import (
     CASCADE_STEP, NoteManager, cascade_position, rects_overlap,
 )
+from settings_isolation import SettingsIsolationMixin
 
 _app = QApplication.instance() or QApplication([])
 
@@ -126,18 +122,20 @@ class FakeScreen:
         return QRect(self._rect)
 
 
-class FreePositionTests(unittest.TestCase):
+class FreePositionTests(SettingsIsolationMixin, unittest.TestCase):
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("FreePositionTests")
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_placement_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
-        self.manager = NoteManager(self.db)
+        # Свои настройки: иначе заметки создаются с видом из настоящего
+        # профиля, и размеры в проверках зависят от выбранного пользователем.
+        self.manager = NoteManager(self.db, settings=self.settings)
 
     def tearDown(self):
         self.manager.close_all()
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def _create_many(self, count):
         with patch.object(QApplication, "screenAt", return_value=FakeScreen()):

@@ -6,14 +6,13 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QTextEdit
 
 _app = QApplication.instance() or QApplication([])
 
 from database.database import Database
 from services.note_manager import NoteManager
-from services.settings import Settings
+from settings_isolation import SettingsIsolationMixin
 from widgets.search_window import SearchWindow, apply_highlight
 
 
@@ -139,21 +138,18 @@ class SearchWindowTests(unittest.TestCase):
         self.assertEqual(self.window.results.count(), 1)
 
 
-class FocusNoteTests(unittest.TestCase):
+class FocusNoteTests(SettingsIsolationMixin, unittest.TestCase):
     """Сквозная проверка: результат поиска -> открытая заметка с подсветкой."""
 
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("FocusNoteTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_search_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
 
     def tearDown(self):
-        self.settings.settings.clear()
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def _app_stub(self):
         """Минимальный App без трея и хоткеев — только поиск и менеджер."""

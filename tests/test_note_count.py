@@ -4,13 +4,13 @@ import shutil
 import tempfile
 import unittest
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication
 
 from database.database import Database
 from services.note_manager import (
     NoteManager, notes_count_label, plural_notes,
 )
+from settings_isolation import SettingsIsolationMixin
 
 _app = QApplication.instance() or QApplication([])
 
@@ -53,7 +53,7 @@ class NotesCountLabelTests(unittest.TestCase):
         self.assertEqual(notes_count_label(0), "Stickio — 0 заметок")
 
 
-class NotesChangedSignalTests(unittest.TestCase):
+class NotesChangedSignalTests(SettingsIsolationMixin, unittest.TestCase):
     """Сигнал должен приходить на создание, удаление и импорт.
 
     Без него подпись трея оставалась бы с устаревшим числом: обновлять её
@@ -61,11 +61,12 @@ class NotesChangedSignalTests(unittest.TestCase):
     """
 
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("NotesChangedTests")
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_count_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
-        self.manager = NoteManager(self.db)
+        # Настройки передаём свои: без этого менеджер создал бы настоящие
+        # и тест зависел бы от вида заметки, выбранного пользователем.
+        self.manager = NoteManager(self.db, settings=self.settings)
         self.calls = []
         self.manager.notes_changed.connect(lambda: self.calls.append(1))
 
@@ -73,6 +74,7 @@ class NotesChangedSignalTests(unittest.TestCase):
         self.manager.close_all()
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def test_create_emits(self):
         self.manager.create_note()
@@ -101,18 +103,18 @@ class NotesChangedSignalTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
 
 
-class TrayTooltipTests(unittest.TestCase):
+class TrayTooltipTests(SettingsIsolationMixin, unittest.TestCase):
     """Сквозная проверка: подпись трея показывает реальное число заметок."""
 
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("TrayTooltipTests")
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_tray_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
 
     def tearDown(self):
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def _app_stub(self):
         """Заглушка App: нужен только manager и tray-подсказка."""
@@ -123,7 +125,7 @@ class TrayTooltipTests(unittest.TestCase):
             "tooltip": "",
             "setToolTip": lambda self, text: setattr(self, "tooltip", text),
         })()
-        stub.manager = NoteManager(self.db)
+        stub.manager = NoteManager(self.db, settings=self.settings)
         stub._refresh_note_count()
         return stub
 

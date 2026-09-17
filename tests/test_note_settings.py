@@ -9,7 +9,6 @@ import shutil
 import tempfile
 import unittest
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -17,8 +16,9 @@ from database.database import Database, NOTE_COLUMNS
 from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH
 from services.note_manager import NoteManager
 from services.settings import (
-    DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, NOTE_SIZE_RANGE, Settings,
+    DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, NOTE_SIZE_RANGE,
 )
+from settings_isolation import SettingsIsolationMixin
 
 _app = QApplication.instance() or QApplication([])
 
@@ -56,15 +56,8 @@ class CreateNoteWithFieldsTests(unittest.TestCase):
         self.assertEqual(set(NOTE_COLUMNS), {r[1] for r in row} - {"id"})
 
 
-class NoteDefaultsTests(unittest.TestCase):
-    def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("NoteDefaultsTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
-
-    def tearDown(self):
-        self.settings.settings.clear()
+class NoteDefaultsTests(SettingsIsolationMixin, unittest.TestCase):
+    # Настройки пишутся в ini во временном каталоге — см. settings_isolation.
 
     def test_defaults_when_nothing_saved(self):
         self.assertEqual(self.settings.note_defaults(), DEFAULT_NOTE_SETTINGS)
@@ -150,21 +143,18 @@ class NoteDefaultsTests(unittest.TestCase):
         self.assertEqual(saved["height"], DEFAULT_HEIGHT)
 
 
-class NewNoteUsesSettingsTests(unittest.TestCase):
+class NewNoteUsesSettingsTests(SettingsIsolationMixin, unittest.TestCase):
     """Сквозная проверка: настройки -> база -> окно заметки."""
 
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("NewNoteUsesSettingsTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_newnote_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
 
     def tearDown(self):
-        self.settings.settings.clear()
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def test_new_note_gets_settings(self):
         self.settings.set_note_defaults(
@@ -266,18 +256,15 @@ class NewNoteUsesSettingsTests(unittest.TestCase):
             manager.close_all()
 
 
-class SettingsDialogNoteTests(unittest.TestCase):
+class SettingsDialogNoteTests(SettingsIsolationMixin, unittest.TestCase):
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("SettingsDialogNoteTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self._orig_warning = QMessageBox.warning
         QMessageBox.warning = staticmethod(lambda *args, **kwargs: None)
 
     def tearDown(self):
         QMessageBox.warning = self._orig_warning
-        self.settings.settings.clear()
+        super().tearDown()
 
     def _dialog(self):
         from app import SettingsDialog

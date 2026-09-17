@@ -68,8 +68,17 @@ def app_command() -> str:
 
 
 class Settings:
-    def __init__(self):
-        self.settings = QSettings(ORG_NAME, APP_NAME)
+    def __init__(self, storage=None):
+        # storage — только для тестов: готовое хранилище вместо реестра,
+        # обычно ini-файл во временном каталоге.
+        #
+        # Без него увести настройки в сторону нечем: имена организации
+        # и приложения здесь зашиты, поэтому QCoreApplication
+        # .setOrganizationName на них не влияет. Тесты, которые «заводили
+        # свой файл настроек» этим способом, на самом деле читали и чистили
+        # настоящую ветку HKCU\Software\Stickio\Stickio — то есть стирали
+        # настройки пользователя: комбинации клавиш, вид заметки, автозапуск.
+        self.settings = storage if storage is not None else QSettings(ORG_NAME, APP_NAME)
 
     def language(self) -> str:
         """Язык интерфейса.

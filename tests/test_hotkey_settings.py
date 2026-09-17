@@ -6,12 +6,13 @@
 """
 import unittest
 
-from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from services.hotkeys import HotkeyError, key_name, normalize_shortcut
-from services.settings import DEFAULT_HOTKEYS, Settings
+from services.settings import DEFAULT_HOTKEYS
+from settings_isolation import SettingsIsolationMixin
 from widgets.hotkey_edit import (
     HotkeyEdit, qt_key_name, qt_key_to_shortcut, qt_modifiers_names,
 )
@@ -95,16 +96,11 @@ class QtCaptureTests(unittest.TestCase):
         )
 
 
-class HotkeySettingsTests(unittest.TestCase):
-    def setUp(self):
-        # Свой файл настроек, чтобы тесты не трогали пользовательские
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("HotkeySettingsTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
-
-    def tearDown(self):
-        self.settings.settings.clear()
+class HotkeySettingsTests(SettingsIsolationMixin, unittest.TestCase):
+    # Настройки пишутся в ini во временном каталоге — см. settings_isolation.
+    # Раньше здесь стоял setOrganizationName("StickioTest") «чтобы тесты
+    # не трогали пользовательские», но на зашитые имена в Settings он не
+    # влияет: тест чистил настоящую ветку реестра.
 
     def test_defaults_when_nothing_saved(self):
         self.assertEqual(self.settings.hotkeys(), DEFAULT_HOTKEYS)
@@ -180,12 +176,9 @@ class HotkeyEditTests(unittest.TestCase):
         self.assertEqual(self.edit.shortcut(), "")
 
 
-class SettingsDialogTests(unittest.TestCase):
+class SettingsDialogTests(SettingsIsolationMixin, unittest.TestCase):
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("SettingsDialogTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self.warnings = []
         # Модальный QMessageBox в тесте бы завис — подменяем статический метод
         self._orig_warning = QMessageBox.warning
@@ -195,7 +188,7 @@ class SettingsDialogTests(unittest.TestCase):
 
     def tearDown(self):
         QMessageBox.warning = self._orig_warning
-        self.settings.settings.clear()
+        super().tearDown()
 
     def _dialog(self):
         from app import SettingsDialog

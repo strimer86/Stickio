@@ -17,7 +17,6 @@ import shutil
 import tempfile
 import unittest
 
-from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import (
     QAbstractButton, QApplication, QComboBox, QDialogButtonBox, QLabel,
     QLineEdit, QSpinBox, QWidget,
@@ -26,7 +25,7 @@ from PySide6.QtWidgets import (
 from database.database import Database
 from services import i18n
 from services.app_info import APP_AUTHOR
-from services.settings import Settings
+from settings_isolation import SettingsIsolationMixin
 
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
@@ -218,12 +217,13 @@ class PluralTests(unittest.TestCase):
         self.assertEqual(i18n.plural("note", 21), "notes")
 
 
-class _UiTestCase(unittest.TestCase):
+class _UiTestCase(SettingsIsolationMixin, unittest.TestCase):
     """Общее для проверок живого интерфейса.
 
     Настройки уводим в ini-файл во временном каталоге: `Settings` пишет в
     реестр по фиксированным именам, и тест, меняющий язык, переписал бы
-    настоящие настройки пользователя.
+    настоящие настройки пользователя. Каталог и готовый `Settings` даёт
+    миксин из settings_isolation.
     """
 
     @classmethod
@@ -231,18 +231,14 @@ class _UiTestCase(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        super().setUp()
         self._saved_language = i18n.current_language()
-        self.tmp = tempfile.mkdtemp(prefix="stickio_i18n_")
-        self.settings = Settings()
-        self.settings.settings = QSettings(
-            os.path.join(self.tmp, "settings.ini"), QSettings.Format.IniFormat
-        )
-        self.db = Database(os.path.join(self.tmp, "notes.db"))
+        self.db = Database(os.path.join(self._settings_dir, "notes.db"))
 
     def tearDown(self):
         self.db.close()
-        shutil.rmtree(self.tmp, ignore_errors=True)
         i18n.set_language(self._saved_language)
+        super().tearDown()
 
     @staticmethod
     def _visible_texts(widget) -> list:

@@ -4,27 +4,19 @@ import shutil
 import tempfile
 import unittest
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from database.database import Database
 from services.note_manager import NoteManager
-from services.settings import (
-    DEFAULT_SAVE_DELAY_MS, SAVE_DELAY_RANGE, Settings,
-)
+from services.settings import DEFAULT_SAVE_DELAY_MS, SAVE_DELAY_RANGE
+from settings_isolation import SettingsIsolationMixin
 
 _app = QApplication.instance() or QApplication([])
 
 
-class SaveDelaySettingTests(unittest.TestCase):
-    def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("SaveDelaySettingTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
-
-    def tearDown(self):
-        self.settings.settings.clear()
+class SaveDelaySettingTests(SettingsIsolationMixin, unittest.TestCase):
+    # Настройки пишутся в ini во временном каталоге — см. settings_isolation.
+    # Своего setUp нет намеренно: всё, что ему нужно было делать, делает миксин.
 
     def test_default_when_nothing_saved(self):
         self.assertEqual(self.settings.save_delay_ms(), DEFAULT_SAVE_DELAY_MS)
@@ -54,19 +46,16 @@ class SaveDelaySettingTests(unittest.TestCase):
         self.assertEqual(self.settings.save_delay_ms(), DEFAULT_SAVE_DELAY_MS)
 
 
-class NoteUsesSaveDelayTests(unittest.TestCase):
+class NoteUsesSaveDelayTests(SettingsIsolationMixin, unittest.TestCase):
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("NoteUsesSaveDelayTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="stickio_savedelay_")
         self.db = Database(os.path.join(self.tmp, "notes.db"))
 
     def tearDown(self):
-        self.settings.settings.clear()
         self.db.close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+        super().tearDown()
 
     def test_new_window_takes_saved_delay(self):
         self.settings.set_save_delay_ms(1200)
@@ -88,18 +77,15 @@ class NoteUsesSaveDelayTests(unittest.TestCase):
             manager.close_all()
 
 
-class SettingsDialogSaveDelayTests(unittest.TestCase):
+class SettingsDialogSaveDelayTests(SettingsIsolationMixin, unittest.TestCase):
     def setUp(self):
-        QCoreApplication.setOrganizationName("StickioTest")
-        QCoreApplication.setApplicationName("SettingsDialogSaveDelayTests")
-        self.settings = Settings()
-        self.settings.settings.clear()
+        super().setUp()
         self._orig_warning = QMessageBox.warning
         QMessageBox.warning = staticmethod(lambda *args, **kwargs: None)
 
     def tearDown(self):
         QMessageBox.warning = self._orig_warning
-        self.settings.settings.clear()
+        super().tearDown()
 
     def _dialog(self):
         from app import SettingsDialog

@@ -25,18 +25,25 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# Папочная сборка (onedir), а не одиночный exe (onefile). Это не вкусовщина:
+# в режиме onefile загрузчик PyInstaller распаковывает Python и все библиотеки
+# во временный каталог %TEMP%\_MEIxxxxx и запускает код оттуда. Для поведенческой
+# эвристики антивируса это классическая картина упакованного вредоноса — именно
+# на неё срабатывал Kaspersky («PDM:Trojan.Win32.Generic») на dist\Stickio.exe.
+# В режиме onedir распаковки нет: библиотеки лежат рядом с exe и грузятся с диска.
+# Цена — вместо одного файла каталог, но его всё равно ставит инсталлятор.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Stickio',
     debug=False,
+    bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    # UPX выключен осознанно: сжатие исполняемого файла — самостоятельный
+    # признак для эвристики, ради которого не стоит экономить мегабайты.
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -44,4 +51,15 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='Noteit.ico',
+    version='version_info.txt',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='Stickio',
 )

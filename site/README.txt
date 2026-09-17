@@ -74,11 +74,11 @@ HTTP/2 включает, но проверить это отсюда нечем.
 Как выложить
 ------------
 
-Одной командой с компьютера (подставьте свой адрес сервера):
+Одной командой из корня проекта (подставьте свой адрес сервера):
 
   rsync -av --delete \
     --exclude downloads \
-    C:/Users/Master/PycharmProjects/Stiker/site/ \
+    ./site/ \
     root@5.44.40.47:/var/www/stickio.tumioai.ru/
 
 Без rsync — обычным scp:

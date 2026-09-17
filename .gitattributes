@@ -1,0 +1,29 @@
+# Окончания строк. Без этого файла результат зависит от настройки
+# core.autocrlf на машине: у одного человека файлы лягут с LF, у другого
+# с CRLF, и Git будет ругаться при каждом обращении к файлу.
+
+* text=auto
+
+# Скрипты Windows. cmd.exe разбирает .bat построчно, и на файле с LF
+# многострочные блоки `if (...)` могут развалиться — а build.bat весь
+# из таких блоков. В репозитории строки хранятся с LF, при выкладке
+# на диск получают CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Исходники и тексты — LF, как принято в git.
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.iss  text eol=lf
+*.spec text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+
+# Двоичное. Git и сам распознаёт такие файлы, но явное надёжнее:
+# иконка и снимки не должны проходить никаких преобразований.
+*.ico  binary
+*.png  binary
+*.webp binary
+*.exe  binary

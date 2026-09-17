@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from database.database import Database, DatabaseClosedError
 from services import transfer
 from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
-from services.note_manager import NoteManager
+from services.note_manager import NoteManager, notes_count_label
 from services.settings import (
     DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, DEFAULT_SAVE_DELAY_MS,
     FONT_SIZE_RANGE, HOTKEY_LABELS, NOTE_SIZE_RANGE, SAVE_DELAY_RANGE, Settings,
@@ -551,6 +551,21 @@ class App:
                 6000,
             )
 
+    def _refresh_note_count(self):
+        """Показывает число заметок в подсказке трея.
+
+        Подсказка — единственное место, где счётчик виден, не открывая меню:
+        наводишь курсор на иконку и сразу знаешь, сколько заметок заведено
+        и сколько из них сейчас на экране.
+        """
+        if self.tray is None:
+            return
+        total = len(self.manager.windows)
+        visible = len([w for w in self.manager.windows.values() if w.isVisible()])
+        self.tray.setToolTip(
+            "%s\nВидимых: %d" % (notes_count_label(total), visible)
+        )
+
     def _refresh_hotkey_labels(self):
         """Обновляет подписи меню трея под текущие комбинации."""
         if self._tray_action_new is None:
@@ -579,10 +594,24 @@ class App:
         else:
             # Показываем все
             self.manager.show_all()
+        # Число видимых изменилось — в подсказке трея оно отдельной строкой
+        self._refresh_note_count()
+
+    def _show_one_and_refresh(self):
+        self.manager.show_one()
+        self._refresh_note_count()
+
+    def _hide_all_and_refresh(self):
+        self.manager.hide_all()
+        self._refresh_note_count()
 
     def _setup_tray(self):
         self.tray = QSystemTrayIcon(create_app_icon())
-        self.tray.setToolTip("Stickio")
+        self._refresh_note_count()
+        # Счётчик обновляется по сигналу, а не вызовом из каждого места, где
+        # заметка создаётся или удаляется: раньше такое обновление легко
+        # забыть, и число в подсказке расходилось бы с реальностью.
+        self.manager.notes_changed.connect(self._refresh_note_count)
 
         menu = QMenu()
 
@@ -593,7 +622,10 @@ class App:
         self._tray_action_new = action_new
 
         action_show_one = menu.addAction("Показать одну")
-        action_show_one.triggered.connect(self.manager.show_one)
+        # Число ВИДИМЫХ меняется и этими действиями, поэтому каждое
+        # оборачивается в свой обработчик: сигнала notes_changed здесь мало,
+        # он говорит только о создании и удалении.
+        action_show_one.triggered.connect(self._show_one_and_refresh)
 
         menu.addSeparator()
 
@@ -602,7 +634,7 @@ class App:
         self._tray_action_toggle = action_show
 
         action_hide = menu.addAction("Скрыть все")
-        action_hide.triggered.connect(self.manager.hide_all)
+        action_hide.triggered.connect(self._hide_all_and_refresh)
 
         menu.addSeparator()
 
@@ -637,7 +669,6 @@ class App:
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
-
     # --- Экспорт, импорт и копии базы ---------------------------------
     #
     # Всё это живёт в меню трея, а не в настройках: это действия «сделать

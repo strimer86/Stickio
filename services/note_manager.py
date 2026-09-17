@@ -1,6 +1,6 @@
 import logging
 
-from PySide6.QtCore import QObject, QRect
+from PySide6.QtCore import QObject, QRect, Signal
 
 from database.database import Database
 from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH, Note
@@ -14,6 +14,26 @@ CASCADE_STEP = 28
 CASCADE_LIMIT = 60
 # Откуда начинаем раскладывать новые заметки.
 CASCADE_START = (120, 120)
+
+
+def plural_notes(count: int) -> str:
+    """Русская форма слова «заметка» для числа.
+
+    Отдельная функция, потому что правило не сводится к «1 — заметка,
+    остальное — заметок»: 2, 3, 4 и 22 — «заметки», но 11..14 — «заметок»
+    (второй десяток ведёт себя как исключение). Тесты гоняют границы.
+    """
+    count = abs(int(count))
+    if count % 10 == 1 and count % 100 != 11:
+        return "заметка"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return "заметки"
+    return "заметок"
+
+
+def notes_count_label(count: int) -> str:
+    """Подпись для трея: «Stickio — 3 заметки»."""
+    return "Stickio — %d %s" % (count, plural_notes(count))
 
 
 def rects_overlap(a: QRect, b: QRect) -> bool:
@@ -66,6 +86,12 @@ def cascade_position(occupied, width: int, height: int, area: QRect,
 
 
 class NoteManager(QObject):
+    # Набор заметок изменился (создана, удалена, загружена). Подпись трея
+    # подписывается на него, чтобы счётчик не пришлось обновлять вручную из
+    # каждого места: забыть это сделать — самый вероятный способ получить
+    # устаревшее число.
+    notes_changed = Signal()
+
     def __init__(self, database: Database, parent=None, settings=None):
         super().__init__(parent)
         self.database = database
@@ -81,6 +107,7 @@ class NoteManager(QObject):
             return
         for note in saved:
             self._open_window(note, show=True)
+        self.notes_changed.emit()
 
     def create_note(self) -> StickyNote:
         # Настройки задают вид НОВОЙ заметки; у уже сохранённых свои цвета.
@@ -97,6 +124,7 @@ class NoteManager(QObject):
         note = self.database.get_note(note_id)
         window = self._open_window(note, show=True)
         self._raise_window(window)
+        self.notes_changed.emit()
         return window
 
     def _free_position(self, width: int, height: int) -> tuple:
@@ -142,6 +170,8 @@ class NoteManager(QObject):
             note = self.database.get_note(note_id)
             created.append(self._open_window(note, show=True))
         logger.info("Imported %d notes", len(created))
+        if created:
+            self.notes_changed.emit()
         return created
 
     def _position_visible(self, x, y, width: int, height: int) -> bool:
@@ -188,6 +218,7 @@ class NoteManager(QObject):
         self.windows.pop(window.note.id, None)
         window.close()
         window.deleteLater()
+        self.notes_changed.emit()
 
     def _visible_ids(self) -> list[int]:
         """ID видимых заметок в стабильном (по id) порядке."""

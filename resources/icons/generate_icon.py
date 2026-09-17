@@ -1,15 +1,29 @@
-"""Генератор иконки приложения — пишет Noteit.ico в корень проекта.
+"""ЧЕРНОВИК. Рабочую иконку НЕ перезаписывает — только пишет образец рядом.
 
-Запускать вручную, если нужна новая иконка:
+Запускать, если нужно посмотреть, что получится, прежде чем делать иконку:
 
     python resources/icons/generate_icon.py
 
-Пишем именно в Noteit.ico, а не рядом с этим скриптом: этот файл —
-единственный источник иконки и для сборщика (ModernStickyNotes.spec), и для
-инсталлятора (installer/ModernStickyNotes.iss). Раньше скрипт писал
-resources/icons/icon.ico, который в сборку не попадал: получалось два
-разных изображения, и правка иконки ни на что не влияла.
+Результат: resources/icons/draft_icon.ico (файл в .gitignore).
+
+== Почему так ==
+
+Иконка приложения — Noteit.ico в КОРНЕ проекта. Её берут:
+  * ModernStickyNotes.spec  — datas=[('Noteit.ico', '.')] и icon=;
+  * installer/ModernStickyNotes.iss — SetupIconFile;
+  * widgets/sticky_note.py — иконка окна заметки.
+
+Это нарисованный вручную файл на 241 КБ: стопка разноцветных стикеров с
+кнопкой, 9 размеров от 16 до 256. Скрипт, который здесь лежит, рисует
+примитивами PIL плоскую жёлтую накладку с линиями — это совсем другое
+изображение, и подменять им Noteit.ico нельзя.
+
+Так уже случилось: скрипт писал свои поделки в Noteit.ico, рабочая иконка
+была потеряна и восстанавливалась из истории git. Поэтому здесь стоит
+явная защита: `save()` никогда не получает путь к Noteit.ico, а `main()`
+дополнительно проверяет, что пишет именно в draft_icon.ico.
 """
+
 import os
 import sys
 
@@ -18,14 +32,19 @@ from PIL import Image, ImageDraw
 # Размеры, которые Windows показывает в разных местах: 16 — в заголовке окна,
 # 32 — на панели задач, 48/256 — в проводнике и крупных значках.
 # ВАЖЕН ПОРЯДОК: первым идёт самый крупный. Pillow в PIL.IcoImagePlugin._save
-# берёт базовое изображение (это draw_icon(256)) и в цикле по размерам
-# проверяет `size[0] > width`; если базовым отдать мелкую картинку, все
-# остальные размеры отсеются. Более того, в ветке else _save вызывает
+# берёт базовое изображение и в цикле по размерам проверяет
+# `size[0] > width`; если базовым отдать мелкую картинку, все остальные
+# размеры отсеются. Более того, в ветке else _save вызывает
 # `frame.thumbnail(size)` — а это правит объект НА МЕСТЕ: после падения до
 # 16x16 базовое изображение становится 16x16, и на следующих итерациях
-# условие отсекает уже вообще всё. Итог — .ico с одной записью на 214 байт,
-# который Windows показывает как мелкий значок. Проверено вживую.
+# условие отсекает уже вообще всё. Итог — .ico с одной записью на 214 байт.
 SIZES = [256, 128, 96, 72, 64, 48, 32, 24, 16]
+
+# Куда пишем черновик. Путь собирается здесь и НЕ может указывать на
+# Noteit.ico: имя зафиксировано, а каталог — только рядом с этим файлом.
+DRAFT_NAME = "draft_icon.ico"
+# Имя рабочей иконки — используется лишь для защиты от подмены.
+PROTECTED_NAME = "Noteit.ico"
 
 BG = "#FFD55E"
 BORDER = "#D4A82E"
@@ -78,25 +97,37 @@ def draw_icon(size: int) -> Image.Image:
     return img
 
 
-def icon_path() -> str:
-    """Путь к Noteit.ico в корне проекта (на два уровня выше этого файла)."""
+def draft_path() -> str:
+    """Путь к файлу-образцу рядом с этим скриптом."""
     here = os.path.dirname(os.path.abspath(__file__))
-    root = os.path.dirname(os.path.dirname(here))
-    return os.path.join(root, "Noteit.ico")
+    return os.path.join(here, DRAFT_NAME)
+
+
+def work_icon_path() -> str:
+    """Путь к рабочей иконке — только для чтения и для сообщений."""
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(root, PROTECTED_NAME)
 
 
 def main() -> int:
-    path = icon_path()
+    path = draft_path()
+    # Защита от будущих правок: даже если путь поменяют, рабочий файл не тронем.
+    if os.path.basename(path) == PROTECTED_NAME:
+        print("Отказ: этот скрипт не должен писать %s." % PROTECTED_NAME)
+        return 1
+
     images = [draw_icon(s) for s in SIZES]
-    # Базовым идёт images[0], а он теперь 256x256 (см. комментарий к SIZES).
+    # Базовым идёт images[0], а он 256x256 (см. комментарий к SIZES).
     images[0].save(
         path,
         format="ICO",
         sizes=[(s, s) for s in SIZES],
         append_images=images[1:],
     )
-    print("Иконка сохранена: %s" % path)
+    print("Черновик сохранён: %s" % path)
     print("Размеры: %s" % ", ".join("%dx%d" % (s, s) for s in SIZES))
+    print()
+    print("Рабочая иконка (%s) НЕ изменена." % work_icon_path())
     return 0
 
 

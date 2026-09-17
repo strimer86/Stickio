@@ -7,18 +7,31 @@ echo.
 
 cd /d "%~dp0"
 
-rem Иконку берут и сборщик (.spec), и инсталлятор (.iss) — ровно один файл
-rem Noteit.ico в корне. Раньше здесь проверялся resources\icons\icon.ico:
-rem он генерировался скриптом, но в сборку не попадал вообще, поэтому
-rem сборка «с новой иконкой» ничего не меняла.
+rem Иконка — нарисованный вручную Noteit.ico в корне, его берут и сборщик
+rem (.spec), и инсталлятор (.iss). Раньше здесь проверялся
+rem resources\icons\icon.ico — генерируемая заглушка, которая в сборку не
+rem попадала вообще, поэтому сборка «с новой иконкой» ничего не меняла.
 if not exist "Noteit.ico" (
     echo [1/3] [ERROR] Не найден Noteit.ico в корне проекта.
     echo        Это единственный источник иконки для .spec и .iss.
     pause
     exit /b 1
-) else (
-    echo [1/3] Icon found: Noteit.ico
 )
+
+rem Размер — грубая, но полезная страховка. Рабочая иконка занимает ~240 КБ:
+rem это изображение со всеми девятью размерами. Файл в единицы килобайт
+rem означает, что её подменили черновиком из resources\icons\generate_icon.py
+rem (так уже было — иконку потом восстанавливали из истории git).
+for %%A in ("Noteit.ico") do set ICON_SIZE=%%~zA
+if %ICON_SIZE% LSS 50000 (
+    echo [1/3] [ERROR] Noteit.ico подозрительно мал: %ICON_SIZE% байт.
+    echo        Похоже, его перезаписал черновик
+    echo        resources\icons\generate_icon.py.
+    echo        Восстановите рабочую иконку перед сборкой.
+    pause
+    exit /b 1
+)
+echo [1/3] Icon found: Noteit.ico (%ICON_SIZE% bytes)
 
 echo [2/3] Building .exe with PyInstaller...
 rem --clean здесь не используем: в этой среде PyInstaller падает на

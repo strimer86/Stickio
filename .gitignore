@@ -17,3 +17,9 @@ logs/
 # OS
 Thumbs.db
 Desktop.ini
+
+# Черновик иконки: рисованный образец, а не рабочая иконка (Noteit.ico в корне)
+resources/icons/draft_icon.ico
+
+# Локальные скрипты проверки
+.trash/

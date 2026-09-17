@@ -32,6 +32,10 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 AppCopyright=© {#MyAppPublisher}
+; Версия в ресурсе самого Setup.exe. AppVersion её не заполняет: без этой
+; строки в свойствах файла установщика «Версия файла» пустая, а в
+; VS_FIXEDFILEINFO стоит 0.0.0.0 — при том что продукт заявляет 1.0.1.
+VersionInfoVersion={#MyAppVersion}
 ; Права администратора по умолчанию: {autopf} тогда указывает на
 ; C:\Program Files, а не на %LOCALAPPDATA%\Programs. Это важно не только
 ; ради порядка — программа, живущая в AppData, выглядит для поведенческой

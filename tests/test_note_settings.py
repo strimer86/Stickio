@@ -14,9 +14,10 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from database.database import Database, NOTE_COLUMNS
+from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH
 from services.note_manager import NoteManager
 from services.settings import (
-    DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, Settings,
+    DEFAULT_NOTE_SETTINGS, FONT_SIZE_RANGE, NOTE_SIZE_RANGE, Settings,
 )
 
 _app = QApplication.instance() or QApplication([])
@@ -110,6 +111,44 @@ class NoteDefaultsTests(unittest.TestCase):
         self.settings.set_confirm_delete(False)
         self.assertFalse(self.settings.confirm_delete())
 
+    def test_size_defaults_come_from_model(self):
+        """Умолчание берём из модели, а не второй копией числа."""
+        saved = self.settings.note_defaults()
+        self.assertEqual(saved["width"], DEFAULT_WIDTH)
+        self.assertEqual(saved["height"], DEFAULT_HEIGHT)
+
+    def test_size_roundtrip(self):
+        self.settings.set_note_defaults({"width": 640, "height": 480})
+        saved = self.settings.note_defaults()
+        self.assertEqual((saved["width"], saved["height"]), (640, 480))
+
+    def test_size_corrupt_values_fall_back(self):
+        self.settings.settings.setValue("note/width", "широкая")
+        self.settings.settings.setValue("note/height", "высокая")
+        saved = self.settings.note_defaults()
+        self.assertEqual(saved["width"], DEFAULT_WIDTH)
+        self.assertEqual(saved["height"], DEFAULT_HEIGHT)
+
+    def test_size_out_of_range_falls_back(self):
+        low, high = NOTE_SIZE_RANGE
+        for bad in (high + 1, low - 1, 0, -100):
+            self.settings.set_note_defaults({"width": bad, "height": bad})
+            saved = self.settings.note_defaults()
+            self.assertEqual(saved["width"], DEFAULT_WIDTH, "width=%r" % bad)
+            self.assertEqual(saved["height"], DEFAULT_HEIGHT, "height=%r" % bad)
+
+    def test_bool_is_not_acceptable_as_size(self):
+        """`bool` — подкласс `int`, и `True` прошёл бы проверку диапазона.
+
+        Размер заметки в 1 пиксель — заведомая поломка, поэтому True/False
+        должны откатываться к умолчанию, а не подставляться как 1 и 0.
+        """
+        self.settings.settings.setValue("note/width", True)
+        self.settings.settings.setValue("note/height", False)
+        saved = self.settings.note_defaults()
+        self.assertEqual(saved["width"], DEFAULT_WIDTH)
+        self.assertEqual(saved["height"], DEFAULT_HEIGHT)
+
 
 class NewNoteUsesSettingsTests(unittest.TestCase):
     """Сквозная проверка: настройки -> база -> окно заметки."""
@@ -162,6 +201,70 @@ class NewNoteUsesSettingsTests(unittest.TestCase):
         finally:
             manager.close_all()
 
+    def test_new_note_gets_configured_size(self):
+        self.settings.set_note_defaults({"width": 520, "height": 420})
+        manager = NoteManager(self.db, settings=self.settings)
+        try:
+            window = manager.create_note()
+            self.assertEqual(
+                (window.note.width, window.note.height), (520, 420)
+            )
+        finally:
+            manager.close_all()
+
+    def test_size_change_applies_to_next_note_only(self):
+        """Уже созданная заметка при смене настройки не должна менять размер."""
+        manager = NoteManager(self.db, settings=self.settings)
+        try:
+            self.settings.set_note_defaults({"width": 300, "height": 250})
+            first = manager.create_note()
+            self.settings.set_note_defaults({"width": 600, "height": 500})
+            second = manager.create_note()
+            self.assertEqual((first.note.width, first.note.height), (300, 250))
+            self.assertEqual((second.note.width, second.note.height), (600, 500))
+        finally:
+            manager.close_all()
+
+    def test_position_matches_configured_size(self):
+        """Место ищется под ТОТ ЖЕ прямоугольник, что пишется в базу.
+
+        Если считать позицию по константам модели, а записывать размер из
+        настроек, увеличенная заметка налезет на соседнюю.
+
+        Экран подменяем: в offscreen Qt даёт фиксированные 800x800, и две
+        заметки 700x600 туда не помещаются физически — каскад честно вернёт
+        последнюю проверенную позицию, и заметки перекроются независимо от
+        логики. Проверять это на 800x800 бессмысленно.
+        """
+        from unittest.mock import patch
+
+        from PySide6.QtCore import QRect
+        from PySide6.QtWidgets import QApplication
+
+        class FakeScreen:
+            def availableGeometry(self):
+                return QRect(0, 0, 1920, 1080)
+
+        self.settings.set_note_defaults({"width": 700, "height": 600})
+        manager = NoteManager(self.db, settings=self.settings)
+        try:
+            with patch.object(QApplication, "screenAt", return_value=FakeScreen()):
+                first = manager.create_note()
+                second = manager.create_note()
+            for window in (first, second):
+                self.assertEqual(
+                    (window.note.width, window.note.height), (700, 600)
+                )
+            overlap = not (
+                second.note.x + second.note.width <= first.note.x
+                or first.note.x + first.note.width <= second.note.x
+                or second.note.y + second.note.height <= first.note.y
+                or first.note.y + first.note.height <= second.note.y
+            )
+            self.assertFalse(overlap, "заметки перекрылись при новом размере")
+        finally:
+            manager.close_all()
+
 
 class SettingsDialogNoteTests(unittest.TestCase):
     def setUp(self):
@@ -191,21 +294,63 @@ class SettingsDialogNoteTests(unittest.TestCase):
         dialog.background_button.set_color(QColor("#123456"))
         dialog.text_button.set_color(QColor("#654321"))
         dialog.font_size_spin.setValue(41)
+        dialog.width_spin.setValue(640)
+        dialog.height_spin.setValue(480)
         dialog._accept()
         saved = self.settings.note_defaults()
         self.assertEqual(saved["background_color"], "#123456")
         self.assertEqual(saved["text_color"], "#654321")
         self.assertEqual(saved["font_size"], 41)
+        self.assertEqual((saved["width"], saved["height"]), (640, 480))
+
+    def test_size_controls_show_saved_values(self):
+        self.settings.set_note_defaults({"width": 640, "height": 480})
+        dialog = self._dialog()
+        self.assertEqual(dialog.width_spin.value(), 640)
+        self.assertEqual(dialog.height_spin.value(), 480)
+
+    def test_size_controls_use_declared_range(self):
+        dialog = self._dialog()
+        low, high = NOTE_SIZE_RANGE
+        for spin in (dialog.width_spin, dialog.height_spin):
+            self.assertEqual((spin.minimum(), spin.maximum()), (low, high))
+
+    def test_size_row_fits_value_column(self):
+        """Строка «ширина × высота» не должна вылезать за колонку значений.
+
+        Проверяем замером, а не на глаз: знак «×» занимает 12 px, и ошибка
+        на пару пикселей в его ширине уже выводила строку за правый край.
+        """
+        from PySide6.QtCore import QPoint
+
+        from app import FIELD_COLUMN_WIDTH
+
+        dialog = self._dialog()
+        dialog.adjustSize()
+        column_left = dialog.font_size_spin.mapTo(dialog, QPoint(0, 0)).x()
+        row_right = (
+            dialog.height_spin.mapTo(dialog, QPoint(0, 0)).x()
+            + dialog.height_spin.width()
+        )
+        self.assertLessEqual(row_right, column_left + FIELD_COLUMN_WIDTH)
+        # левое поле пары стоит в общей колонке, а не смещено
+        self.assertEqual(
+            dialog.width_spin.mapTo(dialog, QPoint(0, 0)).x(), column_left
+        )
 
     def test_restore_defaults_resets_everything(self):
         dialog = self._dialog()
         dialog.font_size_spin.setValue(41)
+        dialog.width_spin.setValue(999)
+        dialog.height_spin.setValue(999)
         dialog.confirm_delete.setChecked(False)
         dialog.background_button.set_color(QColor("#123456"))
         dialog._restore_defaults()
         self.assertEqual(
             dialog.font_size_spin.value(), DEFAULT_NOTE_SETTINGS["font_size"]
         )
+        self.assertEqual(dialog.width_spin.value(), DEFAULT_WIDTH)
+        self.assertEqual(dialog.height_spin.value(), DEFAULT_HEIGHT)
         self.assertTrue(dialog.confirm_delete.isChecked())
         self.assertEqual(
             dialog.background_button.color().name(),

@@ -15,7 +15,7 @@ from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager
 from services.settings import (
     DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, DEFAULT_SAVE_DELAY_MS,
-    FONT_SIZE_RANGE, HOTKEY_LABELS, SAVE_DELAY_RANGE, Settings,
+    FONT_SIZE_RANGE, HOTKEY_LABELS, NOTE_SIZE_RANGE, SAVE_DELAY_RANGE, Settings,
 )
 from widgets.color_picker import ColorPopup
 from widgets.hotkey_edit import HotkeyEdit
@@ -185,7 +185,9 @@ class SettingsDialog(QDialog):
         # Подписи одной ширины — иначе поля встают лесенкой: «Цвет текста:»
         # короче «Размер шрифта:», и колонка значений гуляет вслед за самым
         # длинным текстом.
-        for text in ("Цвет фона:", "Цвет текста:", "Размер шрифта:"):
+        for text in (
+            "Цвет фона:", "Цвет текста:", "Размер шрифта:", "Ширина заметки:",
+        ):
             label = QLabel(text)
             label.setFixedWidth(LABEL_COLUMN_WIDTH)
             note_grid.addWidget(label, note_grid.rowCount(), 0)
@@ -205,6 +207,13 @@ class SettingsDialog(QDialog):
         self.font_size_spin.setSuffix(" пт")
         self.font_size_spin.setFixedWidth(FIELD_COLUMN_WIDTH)
         note_grid.addWidget(self.font_size_spin, 2, 1)
+
+        # Ширину и высоту держим одной строкой: это две половины одного
+        # параметра, и разнесённые по строкам они читаются как два разных
+        # независимых числа.
+        self.width_spin, self.height_spin = self._size_spins(saved_note)
+        size_row = self._size_row(self.width_spin, self.height_spin)
+        note_grid.addLayout(size_row, 3, 1)
         layout.addLayout(self._left_aligned(note_grid))
 
         self.note_hint = QLabel("Относится только к новым заметкам.")
@@ -269,6 +278,50 @@ class SettingsDialog(QDialog):
         return row
 
     @staticmethod
+    def _size_spins(saved_note: dict) -> tuple:
+        """Пара спинбоксов «ширина × высота» для новой заметки.
+
+        Фактическую ширину полей выставляет `_fit_size_row` — по `sizeHint`
+        виджетов (см. там же, почему нельзя обойтись константой).
+        """
+        low, high = NOTE_SIZE_RANGE
+        spins = []
+        for key in ("width", "height"):
+            spin = QSpinBox()
+            spin.setRange(low, high)
+            spin.setValue(saved_note[key])
+            spin.setSingleStep(10)
+            spin.setSuffix(" пт")
+            spins.append(spin)
+        spins[0].setToolTip("Ширина новой заметки в пикселях.")
+        spins[1].setToolTip("Высота новой заметки в пикселях.")
+        return spins
+
+    @staticmethod
+    def _size_row(width_spin: QSpinBox, height_spin: QSpinBox) -> QHBoxLayout:
+        """Строка «ширина × высота», вписанная в колонку значений.
+
+        Собирается целиком здесь, потому что ширину полей нужно считать по
+        фактической ширине знака «×»: замерено 12 px, и ошибка в 4 px уже
+        выводила строку за правый край колонки.
+        """
+        spacing = 6
+        sign = QLabel("×")
+        spare = FIELD_COLUMN_WIDTH - sign.sizeHint().width() - 2 * spacing
+        each = max(30, spare // 2)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(spacing)
+        for spin in (width_spin, height_spin):
+            spin.setFixedWidth(each)
+            row.addWidget(spin)
+            if spin is width_spin:
+                row.addWidget(sign)
+        row.addStretch(1)
+        return row
+
+    @staticmethod
     def _separator() -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -285,6 +338,10 @@ class SettingsDialog(QDialog):
                 self.text_button.set_color(QColor(value))
             elif name == "font_size":
                 self.font_size_spin.setValue(value)
+            elif name == "width":
+                self.width_spin.setValue(value)
+            elif name == "height":
+                self.height_spin.setValue(value)
         self.confirm_delete.setChecked(True)
         self.save_delay_spin.setValue(DEFAULT_SAVE_DELAY_MS)
 
@@ -296,6 +353,8 @@ class SettingsDialog(QDialog):
             "background_color": self.background_button.color().name(),
             "text_color": self.text_button.color().name(),
             "font_size": self.font_size_spin.value(),
+            "width": self.width_spin.value(),
+            "height": self.height_spin.value(),
         }
 
     def _validated_hotkeys(self):

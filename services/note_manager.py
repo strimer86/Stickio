@@ -85,7 +85,13 @@ class NoteManager(QObject):
     def create_note(self) -> StickyNote:
         # Настройки задают вид НОВОЙ заметки; у уже сохранённых свои цвета.
         fields = self.settings.note_defaults()
-        x, y = self._free_position(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+        # Размер берём из настроек, а не из констант модели: cascade_position
+        # подбирает место под конкретный прямоугольник, и если посчитать
+        # позицию для одного размера, а записать другой, увеличившаяся заметка
+        # налезет на соседнюю.
+        width = fields.get("width", DEFAULT_WIDTH)
+        height = fields.get("height", DEFAULT_HEIGHT)
+        x, y = self._free_position(width, height)
         fields["x"], fields["y"] = x, y
         note_id = self.database.create_note(**fields)
         note = self.database.get_note(note_id)

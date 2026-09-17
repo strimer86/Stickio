@@ -7,7 +7,8 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QColor
 
 from models.note import (
-    DEFAULT_BACKGROUND, DEFAULT_FONT_SIZE, DEFAULT_TEXT_COLOR,
+    DEFAULT_BACKGROUND, DEFAULT_FONT_SIZE, DEFAULT_HEIGHT, DEFAULT_TEXT_COLOR,
+    DEFAULT_WIDTH,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,9 +38,17 @@ DEFAULT_NOTE_SETTINGS = {
     "background_color": DEFAULT_BACKGROUND,
     "text_color": DEFAULT_TEXT_COLOR,
     "font_size": DEFAULT_FONT_SIZE,
+    "width": DEFAULT_WIDTH,
+    "height": DEFAULT_HEIGHT,
 }
 
 FONT_SIZE_RANGE = (8, 72)
+
+# Размер новой заметки в пикселях. Нижняя граница совпадает с минимальным
+# размером окна заметки: меньше него задавать бессмысленно — окно всё равно
+# откроется в минимуме, и настройка выглядела бы «неприменившейся».
+# Верхняя — чтобы заметку можно было утащить мышью на любом мониторе.
+NOTE_SIZE_RANGE = (160, 2000)
 
 # Интервал автосохранения, миллисекунды. Значение — пауза после последнего
 # нажатия клавиши, а не период: таймер в заметке одиночный (singleShot),
@@ -126,8 +135,15 @@ class Settings:
 
     @staticmethod
     def _is_valid_note_value(name: str, value) -> bool:
-        low, high = FONT_SIZE_RANGE
         if name == "font_size":
+            low, high = FONT_SIZE_RANGE
+            return isinstance(value, int) and low <= value <= high
+        if name in ("width", "height"):
+            low, high = NOTE_SIZE_RANGE
+            # bool — подкласс int, и `True` прошёл бы проверку «1 в диапазоне»
+            # ровно так же, как осмысленное число. Отсекаем явно.
+            if isinstance(value, bool):
+                return False
             return isinstance(value, int) and low <= value <= high
         # Цвет хранится строкой #RRGGBB; всё остальное — мусор
         return isinstance(value, str) and QColor(value).isValid()

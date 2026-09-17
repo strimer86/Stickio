@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from database.database import DatabaseClosedError
 from models.note import Note
+from services import i18n
 from services.settings import Settings
 from widgets.toolbar import Toolbar
 
@@ -131,6 +132,9 @@ def cursor_for_dirs(dirs: int):
 
 # Стандартное меню QTextEdit приходит на английском: Qt не переводит его сам,
 # если не загружены .qm-файлы. Ключ — подпись без ускорителя и хоткея.
+# Значение — русская подпись, которая затем проходит через i18n.tr: при
+# английском интерфейсе Qt и так отдаёт английские пункты, и подменять их
+# русскими было бы ошибкой, поэтому перевод идёт в обе стороны.
 CONTEXT_MENU_TITLES = {
     "undo": "Отменить",
     "redo": "Вернуть",
@@ -165,10 +169,10 @@ def translate_context_menu(menu) -> None:
         parts = raw.split("\t")
         # ускоритель ("Cu&t") в подписи больше не нужен
         base = parts[0].replace("&", "").strip().lower()
-        translated = CONTEXT_MENU_TITLES.get(base)
-        if translated:
+        source = CONTEXT_MENU_TITLES.get(base)
+        if source:
             action.setText(
-                translated + ("\t" + parts[1] if len(parts) > 1 else "")
+                i18n.tr(source) + ("\t" + parts[1] if len(parts) > 1 else "")
             )
         action.setIcon(QIcon())  # иконки Qt на цветных заметках лишние
     menu.setStyleSheet(CONTEXT_MENU_STYLE)
@@ -265,6 +269,19 @@ class StickyNote(QWidget):
         """
         self._save_timer.setInterval(int(milliseconds))
 
+    def retranslate(self):
+        """Переставляет подписи под текущий язык интерфейса.
+
+        Текста в самой заметке нет — только подсказки кнопок и панель
+        оформления, поэтому перевести уже открытое окно дешевле, чем
+        пересоздавать его: пересоздание потеряло бы позицию, прокрутку и
+        несохранённый набор в редакторе.
+        """
+        self.toggle_button.setToolTip(i18n.tr("Панель оформления"))
+        self.new_button.setToolTip(i18n.tr("Новая заметка"))
+        self.close_button.setToolTip(i18n.tr("Скрыть"))
+        self.toolbar.retranslate()
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
@@ -279,7 +296,7 @@ class StickyNote(QWidget):
 
         self.toggle_button = QPushButton("\u2022\u2022\u2022")
         self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.toggle_button.setToolTip("Панель оформления")
+        self.toggle_button.setToolTip(i18n.tr("Панель оформления"))
         self.toggle_button.setStyleSheet(
             "QPushButton { color: #222222; border: none; background: transparent;"
             " font-size: 14px; padding: 0px 4px; }"
@@ -290,7 +307,7 @@ class StickyNote(QWidget):
 
         self.new_button = QPushButton("+")
         self.new_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.new_button.setToolTip("Новая заметка")
+        self.new_button.setToolTip(i18n.tr("Новая заметка"))
         self.new_button.setStyleSheet(
             "QPushButton { color: #222222; border: none; background: transparent;"
             " font-size: 16px; font-weight: bold; padding: 0px 6px; }"
@@ -303,7 +320,7 @@ class StickyNote(QWidget):
 
         self.close_button = QPushButton("\u00d7")
         self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.close_button.setToolTip("Скрыть")
+        self.close_button.setToolTip(i18n.tr("Скрыть"))
         self.close_button.setStyleSheet(
             "QPushButton { color: #222222; border: none; background: transparent;"
             " font-size: 16px; padding: 0px 4px; }"
@@ -661,8 +678,8 @@ class StickyNote(QWidget):
 
         answer = QMessageBox.question(
             self,
-            "Удалить заметку",
-            "Удалить эту заметку безвозвратно?",
+            i18n.tr("Удалить заметку"),
+            i18n.tr("Удалить эту заметку безвозвратно?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

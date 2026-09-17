@@ -1,51 +1,14 @@
 import ctypes
 import logging
-import os
 import sys
 
-from PySide6.QtCore import QLibraryInfo, QTranslator
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 import logging_config
+from services import i18n
+from services.settings import Settings
 
 logger = logging.getLogger(__name__)
-
-
-def translation_dirs() -> list:
-    """Каталоги, где ищем qtbase_ru.qm.
-
-    В собранном приложении `QLibraryInfo` обычно отдаёт путь, которого рядом
-    с exe нет, поэтому вторым кандидатом идёт распакованная PySide6 — именно
-    туда PyInstaller кладёт translations, если они добавлены в .spec.
-    """
-    dirs = []
-    try:
-        dirs.append(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
-    except Exception:
-        logger.exception("Failed to locate Qt translations path")
-
-    base = getattr(sys, "_MEIPASS", None)
-    if base:
-        dirs.append(os.path.join(base, "PySide6", "translations"))
-    return dirs
-
-
-def install_translator(app: QApplication):
-    """Подключает русский перевод служебных строк Qt.
-
-    Без него английскими остаются диалог выбора цвета, кнопки QMessageBox
-    и стандартное меню редактора — всё, чего нет в нашем коде. Перевод не
-    обязателен для работы: если .qm не нашёлся (сборка без translations),
-    приложение просто остаётся со строками Qt по умолчанию.
-    """
-    translator = QTranslator(app)
-    for directory in translation_dirs():
-        if translator.load("qtbase_ru", directory):
-            app.installTranslator(translator)
-            logger.info("Qt translation loaded from %s", directory)
-            return translator
-    logger.info("Qt translation not found in %s", translation_dirs())
-    return None
 
 
 def set_app_user_model_id():
@@ -94,14 +57,23 @@ def main():
     logging_config.setup_logging()
 
     app = QApplication(sys.argv)
-    install_translator(app)
+
+    # Язык ставим до первого окна: подписи читаются в момент сборки
+    # интерфейса, и перевод, подключённый позже, на них уже не подействует.
+    # По той же причине и перевод служебных строк Qt подключается здесь, а
+    # не в App: сообщение об ошибке запуска показывает ещё этот файл.
+    i18n.set_language(Settings().language())
+    qt_translation = i18n.QtTranslation(app)
+    qt_translation.apply(i18n.current_language())
 
     try:
         app_checker = SingleInstanceChecker()
     except OSError:
         logger.exception("Failed to create single-instance mutex")
         QMessageBox.critical(
-            None, "Stickio", "Не удалось запустить приложение (мьютекс)."
+            None,
+            "Stickio",
+            i18n.tr("Не удалось запустить приложение (мьютекс)."),
         )
         return 1
 
@@ -122,14 +94,17 @@ def main():
         app.setQuitOnLastWindowClosed(False)
 
         try:
-            app_instance = App(app)
+            app_instance = App(app, qt_translation)
             app_instance.start()
         except Exception:
             logger.exception("Failed to initialize application")
             QMessageBox.critical(
-                None, "Stickio",
-                "Не удалось запустить приложение.\n"
-                "Подробности — в журнале logs/stickio.log.",
+                None,
+                "Stickio",
+                i18n.tr(
+                    "Не удалось запустить приложение.\n"
+                    "Подробности — в журнале logs/stickio.log."
+                ),
             )
             return 1
 

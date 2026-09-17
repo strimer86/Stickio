@@ -4,6 +4,7 @@ from PySide6.QtCore import QObject, QRect, Signal
 
 from database.database import Database
 from models.note import DEFAULT_HEIGHT, DEFAULT_WIDTH, Note
+from services import i18n
 from services.settings import Settings
 from widgets.sticky_note import MIN_VISIBLE_HEIGHT, MIN_VISIBLE_WIDTH, StickyNote
 
@@ -17,18 +18,13 @@ CASCADE_START = (120, 120)
 
 
 def plural_notes(count: int) -> str:
-    """Русская форма слова «заметка» для числа.
+    """Форма слова «заметка» для числа — по правилам текущего языка.
 
-    Отдельная функция, потому что правило не сводится к «1 — заметка,
-    остальное — заметок»: 2, 3, 4 и 22 — «заметки», но 11..14 — «заметок»
-    (второй десяток ведёт себя как исключение). Тесты гоняют границы.
+    Само правило живёт в services/i18n.py: у русского три формы и второй
+    десяток ведёт себя как исключение (2, 3, 4 и 22 — «заметки», но 11..14 —
+    «заметок»), у английского форм две. Здесь остаётся только имя слова.
     """
-    count = abs(int(count))
-    if count % 10 == 1 and count % 100 != 11:
-        return "заметка"
-    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-        return "заметки"
-    return "заметок"
+    return i18n.plural("note", count)
 
 
 def notes_count_label(count: int) -> str:

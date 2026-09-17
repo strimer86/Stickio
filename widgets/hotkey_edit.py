@@ -12,6 +12,8 @@
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QLineEdit
 
+from services import i18n
+
 # Служебные клавиши: их нажатие не должно превращаться в комбинацию.
 _IGNORED_KEYS = frozenset({
     Qt.Key.Key_Escape, Qt.Key.Key_Tab, Qt.Key.Key_Backtab,
@@ -79,9 +81,9 @@ def qt_key_to_shortcut(key: int, modifiers) -> tuple:
     mods = qt_modifiers_names(modifiers)
     name = qt_key_name(key)
     if name is None:
-        return "", "Эту клавишу назначить нельзя"
+        return "", i18n.tr("Эту клавишу назначить нельзя")
     if not mods:
-        return "", "Нужен модификатор: Ctrl, Alt, Shift или Win"
+        return "", i18n.tr("Нужен модификатор: Ctrl, Alt, Shift или Win")
     return "+".join(mods + [name]), ""
 
 
@@ -102,10 +104,16 @@ class HotkeyEdit(QLineEdit):
         # readOnly, а не disabled: поле должно принимать фокус и клавиатуру,
         # иначе захватывать будет нечего.
         self.setReadOnly(True)
-        self.setPlaceholderText("Нажмите сочетание")
+        self.retranslate()
+
+    def retranslate(self):
+        """Переставляет подсказки поля под текущий язык интерфейса."""
+        self.setPlaceholderText(i18n.tr("Нажмите сочетание"))
         self.setToolTip(
-            "Нажмите нужное сочетание. Backspace — снять комбинацию. "
-            "Только латиница и цифры."
+            i18n.tr(
+                "Нажмите нужное сочетание. Backspace — снять комбинацию. "
+                "Только латиница и цифры."
+            )
         )
 
     def shortcut(self) -> str:

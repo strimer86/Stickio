@@ -19,6 +19,8 @@ import sys
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QObject
 
+from services import i18n
+
 logger = logging.getLogger(__name__)
 
 WM_HOTKEY = 0x0312
@@ -84,13 +86,16 @@ def parse_shortcut(shortcut: str) -> tuple[int, int]:
     parts = [p.strip().lower() for p in shortcut.split("+") if p.strip()]
     if len(parts) < 2:
         raise HotkeyError(
-            "Горячая клавиша должна содержать модификатор и клавишу: %r" % shortcut
+            i18n.tr("Горячая клавиша должна содержать модификатор и клавишу: %r")
+            % shortcut
         )
 
     modifiers = 0
     for part in parts[:-1]:
         if part not in _MODIFIER_NAMES:
-            raise HotkeyError("Неизвестный модификатор %r в %r" % (part, shortcut))
+            raise HotkeyError(
+                i18n.tr("Неизвестный модификатор %r в %r") % (part, shortcut)
+            )
         modifiers |= _MODIFIER_NAMES[part]
 
     key = parts[-1]
@@ -102,10 +107,14 @@ def parse_shortcut(shortcut: str) -> tuple[int, int]:
         # кодом клавиши и молча зарегистрировал бы не ту комбинацию.
         vk = ord(key.upper())
     else:
-        raise HotkeyError("Неизвестная клавиша %r в %r" % (key, shortcut))
+        raise HotkeyError(
+            i18n.tr("Неизвестная клавиша %r в %r") % (key, shortcut)
+        )
 
     if not modifiers:
-        raise HotkeyError("Нужен хотя бы один модификатор: %r" % shortcut)
+        raise HotkeyError(
+            i18n.tr("Нужен хотя бы один модификатор: %r") % shortcut
+        )
     return modifiers | MOD_NOREPEAT, vk
 
 
@@ -115,7 +124,9 @@ def key_name(vk: int) -> str:
         return _VK_DISPLAY[vk]
     if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:  # цифры и латиница
         return chr(vk)
-    raise HotkeyError("Нет подписи для виртуального кода 0x%X" % vk)
+    raise HotkeyError(
+            i18n.tr("Нет подписи для виртуального кода 0x%X") % vk
+        )
 
 
 def normalize_shortcut(shortcut: str) -> str:

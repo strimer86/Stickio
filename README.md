@@ -12,10 +12,10 @@
 ## Скачать
 
 - **Сайт:** <https://stickio.tumioai.ru>
-- **Установщик:** [Stickio_Setup_1.0.1.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.0.1.exe) — 33,4 МБ
+- **Установщик:** [Stickio_Setup_1.1.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe) — 33,4 МБ
 
 ```
-SHA-256  523553881c31c83658cab897dd1160c2fbfd58218c292be5d8086bb7a9f7a40e
+SHA-256  c4067e9bedd5a8e733cfda8b195e0e74ce2ab221f493a1a5ef2a7919cf773203
 ```
 
 Windows 10 и 11, 64-бит. Около 130 МБ на диске, интернет не нужен.
@@ -41,6 +41,8 @@ Windows 10 и 11, 64-бит. Около 130 МБ на диске, интерне
 - **Экспорт и перенос** — все заметки выгружаются в JSON или HTML, базу можно
   скопировать на другой компьютер.
 - **Живёт в трее** и умеет запускаться вместе с Windows.
+- **Русский и английский** — язык переключается в настройках и применяется
+  сразу, без перезапуска.
 - Сочетания клавиш меняются в настройках.
 
 ## Где лежат заметки
@@ -101,8 +103,13 @@ Kaspersky.
 PYTHONPATH=. python -m unittest discover -s tests
 ```
 
-282 теста, около двух секунд. `PYTHONPATH` обязателен: без него не находятся
+306 тестов, около трёх секунд. `PYTHONPATH` обязателен: без него не находятся
 пакеты `services`, `widgets` и остальные.
+
+Тесты перевода сверяют словарь с исходниками в обе стороны: у каждой русской
+строки должен быть английский перевод, и у каждого перевода — строка в коде.
+Кроме этого английский интерфейс обходится по живому дереву виджетов — так
+ловится подпись, которая не прошла через `tr()` и осталась русской.
 
 Отдельные тесты рендерят окна Qt, поэтому запускать их лучше на обычном рабочем
 столе, а не в безоконной среде.
@@ -119,6 +126,7 @@ PYTHONPATH=. python -m unittest discover -s tests
 | Захват сочетания клавиш | `widgets/hotkey_edit.py` |
 | Глобальные сочетания (Win32) | `services/hotkeys.py` |
 | Настройки | `services/settings.py` |
+| Перевод интерфейса, словарь | `services/i18n.py` |
 | Видимость, каскад, счётчик | `services/note_manager.py` |
 | Поиск по заметкам | `services/search.py` |
 | Экспорт, импорт, копия базы | `services/transfer.py` |
@@ -153,10 +161,11 @@ No account, no ads, no telemetry, **no network requests at all** — verifiable
 by searching the source. Notes live in a local SQLite file
 (`%LOCALAPPDATA%\Stickio\notes.db`).
 
-The interface is currently **Russian only**; English localisation is planned.
+The interface comes in **Russian and English**; switch it in the settings, no
+restart needed.
 
 - Website: <https://stickio.tumioai.ru>
-- Installer: [Stickio_Setup_1.0.1.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.0.1.exe) (33.4 MB, Windows 10/11 64-bit)
+- Installer: [Stickio_Setup_1.1.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe) (33.4 MB, Windows 10/11 64-bit)
 - The installer is unsigned, so SmartScreen may warn about an unknown publisher.
 
 Built with Python 3.11 and PySide6 (Qt 6), SQLite. Licensed under the

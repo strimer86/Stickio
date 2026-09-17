@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QPushButton, QVBoxLayout, QWidget,
 )
 
-from services import search
+from services import i18n, search
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 # «выделение»: выделение синее с белым текстом, и на цветных стикерах
 # найденное сливалось бы с остальным текстом.
 HIGHLIGHT_COLOR = "#ffe36e"
-
-WINDOW_HINT = "Искать по всем заметкам. Enter — открыть найденную."
 
 # Стиль списка результатов. Системное выделение — синий фон с белым текстом,
 # но подписи строк у нас тёмные, и выбранная строка становится нечитаемой.
@@ -51,7 +49,7 @@ class SearchWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Поиск по заметкам")
+        self.setWindowTitle(i18n.tr("Поиск по заметкам"))
         self.setWindowFlags(
             Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint
         )
@@ -71,17 +69,13 @@ class SearchWindow(QWidget):
 
         query_row = QHBoxLayout()
         self.query_edit = QLineEdit()
-        self.query_edit.setPlaceholderText("Что искать…")
+        self.query_edit.setPlaceholderText(i18n.tr("Что искать…"))
         self.query_edit.setClearButtonEnabled(True)
         self.query_edit.textChanged.connect(self.refresh)
         self.query_edit.returnPressed.connect(self._activate_current)
         query_row.addWidget(self.query_edit)
 
-        self.regex_check = QCheckBox("Рег. выражение")
-        self.regex_check.setToolTip(
-            "Искать как регулярное выражение. Без галки запрос ищется "
-            "буквально: скобки и звёздочки не имеют особого смысла."
-        )
+        self.regex_check = QCheckBox()
         self.regex_check.toggled.connect(self.refresh)
         query_row.addWidget(self.regex_check)
         layout.addLayout(query_row)
@@ -105,12 +99,36 @@ class SearchWindow(QWidget):
         layout.addWidget(self.results, 1)
 
         buttons = QHBoxLayout()
-        buttons.addWidget(QLabel(WINDOW_HINT))
+        self.hint_label = QLabel()
+        buttons.addWidget(self.hint_label)
         buttons.addStretch(1)
-        self.close_button = QPushButton("Закрыть")
+        self.close_button = QPushButton()
         self.close_button.clicked.connect(self.hide)
         buttons.addWidget(self.close_button)
         layout.addLayout(buttons)
+
+        self.retranslate()
+
+    def retranslate(self):
+        """Переставляет подписи окна под текущий язык интерфейса.
+
+        Список результатов пересобираем: его строки тоже текст, а не
+        готовые виджеты, и без refresh() в нём остался бы прежний язык.
+        """
+        self.setWindowTitle(i18n.tr("Поиск по заметкам"))
+        self.query_edit.setPlaceholderText(i18n.tr("Что искать…"))
+        self.regex_check.setText(i18n.tr("Рег. выражение"))
+        self.regex_check.setToolTip(
+            i18n.tr(
+                "Искать как регулярное выражение. Без галки запрос ищется "
+                "буквально: скобки и звёздочки не имеют особого смысла."
+            )
+        )
+        self.hint_label.setText(
+            i18n.tr("Искать по всем заметкам. Enter — открыть найденную.")
+        )
+        self.close_button.setText(i18n.tr("Закрыть"))
+        self.refresh()
 
     # --- поиск ---------------------------------------------------------
 
@@ -152,18 +170,19 @@ class SearchWindow(QWidget):
         self.results.clear()
         for result in self._results:
             item = QListWidgetItem(
-                "Заметка %d — совпадений: %d\n%s"
+                i18n.tr("Заметка %d — совпадений: %d\n%s")
                 % (result["id"], result["count"], result["snippet"])
             )
             item.setData(Qt.ItemDataRole.UserRole, result["id"])
             self.results.addItem(item)
 
         if not self._results:
-            self.summary.setText("Ничего не найдено.")
+            self.summary.setText(i18n.tr("Ничего не найдено."))
             return
         total = sum(r["count"] for r in self._results)
         self.summary.setText(
-            "Найдено заметок: %d, совпадений: %d" % (len(self._results), total)
+            i18n.tr("Найдено заметок: %d, совпадений: %d")
+            % (len(self._results), total)
         )
         # Первый результат сразу выделяем: чаще всего нужен именно он, и
         # лишний клик ни к чему.

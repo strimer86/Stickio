@@ -10,6 +10,7 @@ from models.note import (
     DEFAULT_BACKGROUND, DEFAULT_FONT_SIZE, DEFAULT_HEIGHT, DEFAULT_TEXT_COLOR,
     DEFAULT_WIDTH,
 )
+from services import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,30 @@ def app_command() -> str:
 class Settings:
     def __init__(self):
         self.settings = QSettings(ORG_NAME, APP_NAME)
+
+    def language(self) -> str:
+        """Язык интерфейса.
+
+        Записи нет — подстраиваемся под язык системы, но только один раз:
+        дальше выбор уже сохранён, и подстраиваться снова нельзя — человек
+        мог специально поставить другой язык. Битое значение (руками
+        правленный реестр) обрабатывается так же, как отсутствующее.
+        """
+        saved = self.settings.value("language", "", type=str)
+        if saved in i18n.LANGUAGE_CODES:
+            return saved
+        return i18n.system_language()
+
+    def set_language(self, code: str):
+        """Сохраняет выбор языка.
+
+        Неизвестный код — ошибка, а не «молча ничего»: единственный
+        вызывающий берёт значение из списка в настройках, и тихий отказ
+        выглядел бы как «галка не работает».
+        """
+        if code not in i18n.LANGUAGE_CODES:
+            raise ValueError("Unknown language: %r" % code)
+        self.settings.setValue("language", code)
 
     def hotkeys(self) -> dict:
         """Текущие комбинации: сохранённые, иначе значения по умолчанию.

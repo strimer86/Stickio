@@ -7,6 +7,8 @@
 import logging
 import re
 
+from services import i18n
+
 logger = logging.getLogger(__name__)
 
 # Сколько символов контекста показывать вокруг найденного слова в результатах.
@@ -52,7 +54,7 @@ def compile_query(query: str, regex: bool = False):
     try:
         return re.compile(text, re.IGNORECASE | re.DOTALL)
     except re.error as exc:
-        raise SearchError("Некорректное выражение: %s" % exc)
+        raise SearchError(i18n.tr("Некорректное выражение: %s") % exc)
 
 
 def plain_text(content: str) -> str:

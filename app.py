@@ -4,13 +4,14 @@ import logging
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QGridLayout,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
+    QGridLayout,
     QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSpinBox,
     QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 from database.database import Database, DatabaseClosedError
-from services import transfer
+from services import i18n, transfer
 from services.hotkeys import GlobalHotkeys, HotkeyError, normalize_shortcut
 from services.note_manager import NoteManager, notes_count_label
 from services.settings import (
@@ -86,13 +87,20 @@ class _ColorButton(QPushButton):
 
 
 class SettingsDialog(QDialog):
-    """Настройки: автозапуск и системные горячие клавиши."""
+    """Настройки: язык, автозапуск, вид новой заметки и горячие клавиши."""
 
     def __init__(self, settings: Settings, parent: QWidget = None):
         super().__init__(parent)
         self._settings = settings
         self._edits = {}
-        self.setWindowTitle("Настройки")
+        # Что переставлять при смене языка: (виджет, что менять, исходная
+        # строка, хвост). Готовые лямбды здесь не годятся: заведённые в
+        # цикле, они все ссылались бы на последний виджет.
+        self._tr_items = []
+        # Язык на момент открытия. Смена применяется сразу (иначе выбор
+        # выглядит неработающим), поэтому «Отмена» обязана вернуть прежний —
+        # иначе она отменяла бы не всё.
+        self._language_at_open = i18n.current_language()
         self.setMinimumWidth(380)
 
         layout = QVBoxLayout(self)
@@ -106,8 +114,33 @@ class SettingsDialog(QDialog):
         toggles = QVBoxLayout()
         toggles.setContentsMargins(0, 0, 0, 0)
 
-        self.autostart = QCheckBox("Запускать вместе с Windows")
+        # Язык — первой строкой: это единственная настройка, результат
+        # которой виден прямо здесь, и искать её внизу списка незачем.
+        language_row = QHBoxLayout()
+        self.language_label = QLabel()
+        self.language_label.setFixedWidth(LABEL_COLUMN_WIDTH)
+        self._register(self.language_label, "text", "Язык интерфейса:")
+        language_row.addWidget(self.language_label)
+
+        self.language_combo = QComboBox()
+        for code, name in i18n.LANGUAGES:
+            # Код языка кладём данными, а не разбираем подпись обратно:
+            # названия языков не переводятся и совпадать не обязаны.
+            self.language_combo.addItem(name, code)
+        self.language_combo.setCurrentIndex(
+            i18n.LANGUAGE_CODES.index(self._language_at_open)
+        )
+        self.language_combo.setFixedWidth(FIELD_COLUMN_WIDTH)
+        language_row.addWidget(self.language_combo)
+        language_row.addStretch(1)
+        toggles.addLayout(language_row)
+        # Сигнал подключаем последним: addItem и setCurrentIndex выше уже
+        # дёрнули бы обработчик, когда остальных виджетов ещё нет.
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+
+        self.autostart = QCheckBox()
         self.autostart.setChecked(settings.autostart_enabled())
+        self._register(self.autostart, "text", "Запускать вместе с Windows")
         toggles.addWidget(self.autostart)
 
         # Подпись держим короткой: QCheckBox не умеет переносить текст, и
@@ -115,21 +148,24 @@ class SettingsDialog(QDialog):
         # распирал диалог с 380 до 478 — сетки с полями фиксированной ширины
         # оставались 264, и поля вставали не на одну вертикаль с галками.
         # Что именно спрашивается, сказано в подсказке.
-        self.confirm_delete = QCheckBox("Спрашивать при удалении")
+        self.confirm_delete = QCheckBox()
         self.confirm_delete.setChecked(settings.confirm_delete())
-        self.confirm_delete.setToolTip(
+        self._register(self.confirm_delete, "text", "Спрашивать при удалении")
+        self._register(
+            self.confirm_delete, "tooltip",
             "Показывать запрос перед удалением заметки.\n"
-            "Удаление безвозвратное, поэтому по умолчанию запрос включён."
+            "Удаление безвозвратное, поэтому по умолчанию запрос включён.",
         )
         toggles.addWidget(self.confirm_delete)
 
         delay_row = QHBoxLayout()
-        delay_label = QLabel("Сохранять текст через:")
+        self.delay_label = QLabel()
         # Ширину метки фиксируем по самой длинной подписи в колонке
         # («Сохранять текст через:», 264 px): тогда спинбокс встаёт ровно
         # под «Цвет фона»/«Размер шрифта», а не уезжает в отдельную колонку.
-        delay_label.setFixedWidth(LABEL_COLUMN_WIDTH)
-        delay_row.addWidget(delay_label)
+        self.delay_label.setFixedWidth(LABEL_COLUMN_WIDTH)
+        self._register(self.delay_label, "text", "Сохранять текст через:")
+        delay_row.addWidget(self.delay_label)
         self.save_delay_spin = QSpinBox()
         low, high = SAVE_DELAY_RANGE
         self.save_delay_spin.setRange(low, high)
@@ -137,12 +173,13 @@ class SettingsDialog(QDialog):
         # колесом от 200 до 5000 с шагом 1 было бы мучением.
         self.save_delay_spin.setSingleStep(100)
         self.save_delay_spin.setValue(settings.save_delay_ms())
-        self.save_delay_spin.setSuffix(" мс")
         self.save_delay_spin.setFixedWidth(FIELD_COLUMN_WIDTH)
-        self.save_delay_spin.setToolTip(
+        self._register(self.save_delay_spin, "suffix", " мс")
+        self._register(
+            self.save_delay_spin, "tooltip",
             "Пауза после последнего нажатия клавиши. Пока печатаешь без "
             "остановки, запись не идёт — она начинается, когда перестанешь "
-            "печатать."
+            "печатать.",
         )
         delay_row.addWidget(self.save_delay_spin)
         delay_row.addStretch(1)
@@ -156,7 +193,9 @@ class SettingsDialog(QDialog):
         layout.addLayout(toggles_row)
 
         layout.addWidget(self._separator())
-        layout.addWidget(QLabel("Новая заметка"))
+        self.note_section = QLabel()
+        self._register(self.note_section, "text", "Новая заметка")
+        layout.addWidget(self.note_section)
 
         saved_note = settings.note_defaults()
         note_grid = QGridLayout()
@@ -166,8 +205,9 @@ class SettingsDialog(QDialog):
         for text in (
             "Цвет фона:", "Цвет текста:", "Размер шрифта:", "Ширина заметки:",
         ):
-            label = QLabel(text)
+            label = QLabel()
             label.setFixedWidth(LABEL_COLUMN_WIDTH)
+            self._register(label, "text", text)
             note_grid.addWidget(label, note_grid.rowCount(), 0)
         self.background_button = _ColorButton(for_text=False)
         self.background_button.set_color(QColor(saved_note["background_color"]))
@@ -182,30 +222,44 @@ class SettingsDialog(QDialog):
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(*FONT_SIZE_RANGE)
         self.font_size_spin.setValue(saved_note["font_size"])
-        self.font_size_spin.setSuffix(" пт")
         self.font_size_spin.setFixedWidth(FIELD_COLUMN_WIDTH)
+        self._register(self.font_size_spin, "suffix", " пт")
         note_grid.addWidget(self.font_size_spin, 2, 1)
 
         # Ширину и высоту держим одной строкой: это две половины одного
         # параметра, и разнесённые по строкам они читаются как два разных
         # независимых числа.
         self.width_spin, self.height_spin = self._size_spins(saved_note)
+        for spin in (self.width_spin, self.height_spin):
+            self._register(spin, "suffix", " пт")
+        self._register(
+            self.width_spin, "tooltip", "Ширина новой заметки в пикселях."
+        )
+        self._register(
+            self.height_spin, "tooltip", "Высота новой заметки в пикселях."
+        )
         size_row = self._size_row(self.width_spin, self.height_spin)
         note_grid.addLayout(size_row, 3, 1)
         layout.addLayout(self._left_aligned(note_grid))
 
-        self.note_hint = QLabel("Относится только к новым заметкам.")
+        self.note_hint = QLabel()
         self.note_hint.setStyleSheet("color: #666666; font-size: 11px;")
+        self._register(self.note_hint, "text", "Относится только к новым заметкам.")
         layout.addWidget(self.note_hint)
 
         layout.addWidget(self._separator())
-        layout.addWidget(QLabel("Горячие клавиши"))
+        self.hotkeys_section = QLabel()
+        self._register(self.hotkeys_section, "text", "Горячие клавиши")
+        layout.addWidget(self.hotkeys_section)
 
         grid = QGridLayout()
         saved = settings.hotkeys()
         for row, name in enumerate(HOTKEY_LABELS):
-            label = QLabel(HOTKEY_LABELS[name] + ":")
+            label = QLabel()
             label.setFixedWidth(LABEL_COLUMN_WIDTH)
+            # Двоеточие дописываем после перевода: ключом словаря служит
+            # сама подпись действия, без знака препинания.
+            self._register(label, "text", HOTKEY_LABELS[name], suffix=":")
             grid.addWidget(label, row, 0)
             edit = HotkeyEdit()
             edit.set_shortcut(saved.get(name, ""))
@@ -213,12 +267,14 @@ class SettingsDialog(QDialog):
             self._edits[name] = edit
         layout.addLayout(self._left_aligned(grid))
 
-        self.hint = QLabel(
-            "Клавиша назначается при фокусе в поле. Backspace — снять. "
-            "Нужен модификатор: Ctrl, Alt, Shift или Win."
-        )
+        self.hint = QLabel()
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color: #666666; font-size: 11px;")
+        self._register(
+            self.hint, "text",
+            "Клавиша назначается при фокусе в поле. Backspace — снять. "
+            "Нужен модификатор: Ctrl, Alt, Shift или Win.",
+        )
         layout.addWidget(self.hint)
 
         self.buttons = QDialogButtonBox(
@@ -228,18 +284,69 @@ class SettingsDialog(QDialog):
         )
         # Qt не переводит стандартные кнопки, если не загружен .qm, а
         # приложение русскоязычное — подписи задаём сами.
-        for standard, text in (
+        self._standard_buttons = (
             (QDialogButtonBox.StandardButton.Ok, "ОК"),
             (QDialogButtonBox.StandardButton.Cancel, "Отмена"),
             (QDialogButtonBox.StandardButton.RestoreDefaults, "По умолчанию"),
-        ):
-            self.buttons.button(standard).setText(text)
+        )
         self.buttons.accepted.connect(self._accept)
         self.buttons.rejected.connect(self.reject)
         self.buttons.button(
             QDialogButtonBox.StandardButton.RestoreDefaults
         ).clicked.connect(self._restore_defaults)
         layout.addWidget(self.buttons)
+
+        self.retranslate()
+
+    def _register(self, widget, attribute: str, source: str, suffix: str = ""):
+        """Запоминает подпись, которую надо переставить при смене языка.
+
+        Хранится пара «виджет + что именно менять», а не готовая лямбда:
+        лямбда, заведённая в цикле, захватила бы последний виджет, и
+        переводился бы он один.
+        """
+        self._tr_items.append((widget, attribute, source, suffix))
+
+    def retranslate(self):
+        """Ставит все подписи диалога под текущий язык.
+
+        Диалог переводит себя сам: язык выбирают именно здесь, и до
+        нажатия «ОК» пользователь должен видеть, что выбрал.
+        """
+        self.setWindowTitle(i18n.tr("Настройки"))
+        for widget, attribute, source, suffix in self._tr_items:
+            text = i18n.tr(source) + suffix
+            if attribute == "text":
+                widget.setText(text)
+            elif attribute == "tooltip":
+                widget.setToolTip(text)
+            elif attribute == "suffix":
+                widget.setSuffix(text)
+        for standard, source in self._standard_buttons:
+            self.buttons.button(standard).setText(i18n.tr(source))
+
+    def _on_language_changed(self, _index):
+        """Применяет язык сразу при выборе в списке.
+
+        Не по «ОК»: иначе выбор выглядел бы неработающим до перезапуска, и
+        проверить его было бы нечем. Откат — на «Отмене», см. reject().
+        """
+        if not i18n.set_language(self.language_combo.currentData()):
+            return
+        self.retranslate()
+
+    def reject(self):
+        """«Отмена» возвращает и язык: он применялся сразу при выборе.
+
+        Диалог после этого закрывается, и подписи в нём уже никто не увидит,
+        но оставлять их на отменённом языке — значит держать окно в
+        состоянии, которого не бывает: следующий, кто откроет его повторно,
+        получит новый объект, а вот код, читающий подписи (тесты), — нет.
+        """
+        if i18n.current_language() != self._language_at_open:
+            i18n.set_language(self._language_at_open)
+            self.retranslate()
+        super().reject()
 
     @staticmethod
     def _left_aligned(layout) -> QHBoxLayout:
@@ -260,7 +367,9 @@ class SettingsDialog(QDialog):
         """Пара спинбоксов «ширина × высота» для новой заметки.
 
         Ширину полей не задаём: её считает раскладка по sizeHint виджета,
-        см. `_size_row`.
+        см. `_size_row`. Подписи « пт» и подсказки тоже не здесь: их ставит
+        retranslate() по списку _tr_items, иначе одни и те же строки жили бы
+        в двух местах и разошлись бы при первой же правке.
         """
         low, high = NOTE_SIZE_RANGE
         spins = []
@@ -269,10 +378,7 @@ class SettingsDialog(QDialog):
             spin.setRange(low, high)
             spin.setValue(saved_note[key])
             spin.setSingleStep(10)
-            spin.setSuffix(" пт")
             spins.append(spin)
-        spins[0].setToolTip("Ширина новой заметки в пикселях.")
-        spins[1].setToolTip("Высота новой заметки в пикселях.")
         return spins
 
     @staticmethod
@@ -342,7 +448,7 @@ class SettingsDialog(QDialog):
             try:
                 values[name] = normalize_shortcut(raw)
             except HotkeyError as exc:
-                QMessageBox.warning(self, "Настройки", str(exc))
+                QMessageBox.warning(self, i18n.tr("Настройки"), str(exc))
                 edit.setFocus()
                 return None
 
@@ -353,9 +459,13 @@ class SettingsDialog(QDialog):
             if value in used:
                 QMessageBox.warning(
                     self,
-                    "Настройки",
-                    "Комбинация %s назначена дважды: «%s» и «%s»."
-                    % (value, HOTKEY_LABELS[used[value]], HOTKEY_LABELS[name]),
+                    i18n.tr("Настройки"),
+                    i18n.tr("Комбинация %s назначена дважды: «%s» и «%s».")
+                    % (
+                        value,
+                        i18n.tr(HOTKEY_LABELS[used[value]]),
+                        i18n.tr(HOTKEY_LABELS[name]),
+                    ),
                 )
                 self._edits[name].setFocus()
                 return None
@@ -376,13 +486,18 @@ class SettingsDialog(QDialog):
             except Exception:
                 logger.exception("Failed to change autostart")
                 QMessageBox.warning(
-                    self, "Настройки", "Не удалось изменить автозапуск."
+                    self,
+                    i18n.tr("Настройки"),
+                    i18n.tr("Не удалось изменить автозапуск."),
                 )
                 return
 
         self._settings.set_confirm_delete(self.confirm_delete.isChecked())
         self._settings.set_save_delay_ms(self.save_delay_spin.value())
         self._settings.set_note_defaults(self.note_settings())
+        # Язык применялся сразу при выборе в списке — здесь его только
+        # сохраняем, чтобы он пережил перезапуск.
+        self._settings.set_language(i18n.current_language())
         self._values = values
         self.accept()
 
@@ -396,13 +511,23 @@ class SettingsDialog(QDialog):
 class App:
     """Основной класс приложения Stickio - менеджер заметок."""
 
-    def __init__(self, app):
+    def __init__(self, app, qt_translation=None):
         """Инициализирует приложение.
 
         Args:
             app: Экземпляр QApplication
+            qt_translation: перевод служебных строк Qt, уже подключённый
+                в main.py. Передаётся, а не создаётся здесь, потому что
+                язык ставится ДО появления первого окна: сообщение об
+                ошибке запуска показывает ещё main.py.
         """
         self.app = app
+        # Объект нужен на всю жизнь приложения: смена языка снимает старый
+        # перевод и ставит новый, а без сохранённой ссылки снять его нельзя.
+        self.qt_translation = qt_translation or i18n.QtTranslation(app)
+        # Язык, под который собран текущий интерфейс. Нужен, чтобы не
+        # пересобирать меню трея и не трогать окна, когда язык не менялся.
+        self._language = i18n.current_language()
         self.settings = Settings()
         self.database = Database()
         # Настройки передаём менеджеру: из них берётся вид новой заметки и
@@ -517,8 +642,10 @@ class App:
         if self.tray is not None and self.tray.isSystemTrayAvailable():
             self.tray.showMessage(
                 "Stickio",
-                "Не удалось занять горячие клавиши: %s.\n"
-                "Их перехватила другая программа."
+                i18n.tr(
+                    "Не удалось занять горячие клавиши: %s.\n"
+                    "Их перехватила другая программа."
+                )
                 % ", ".join(self.hotkeys.failed),
                 QSystemTrayIcon.MessageIcon.Warning,
                 6000,
@@ -536,7 +663,7 @@ class App:
         total = len(self.manager.windows)
         visible = len([w for w in self.manager.windows.values() if w.isVisible()])
         self.tray.setToolTip(
-            "%s\nВидимых: %d" % (notes_count_label(total), visible)
+            i18n.tr("%s\nВидимых: %d") % (notes_count_label(total), visible)
         )
 
     def _refresh_hotkey_labels(self):
@@ -545,16 +672,21 @@ class App:
             return
         saved = self.settings.hotkeys()
         self._tray_action_new.setText(
-            menu_label("+ Новая заметка", saved.get("new_note", ""))
+            menu_label(
+                i18n.tr("+ Новая заметка"), saved.get("new_note", "")
+            )
         )
         self._tray_action_toggle.setText(
             menu_label(
-                "Показать/скрыть все", saved.get("toggle_visibility", "")
+                i18n.tr("Показать/скрыть все"),
+                saved.get("toggle_visibility", ""),
             )
         )
         if self._tray_action_search is not None:
             self._tray_action_search.setText(
-                menu_label("Поиск по заметкам", saved.get("search", ""))
+                menu_label(
+                    i18n.tr("Поиск по заметкам"), saved.get("search", "")
+                )
             )
 
     def _toggle_all_notes_visibility(self):
@@ -601,11 +733,11 @@ class App:
 
         # Подписи с комбинациями ставятся в _refresh_hotkey_labels: после
         # переназначения текст меню должен меняться вместе с ними.
-        action_new = menu.addAction("+ Новая заметка")
+        action_new = menu.addAction(i18n.tr("+ Новая заметка"))
         action_new.triggered.connect(self.manager.create_note)
         self._tray_action_new = action_new
 
-        action_show_one = menu.addAction("Показать одну")
+        action_show_one = menu.addAction(i18n.tr("Показать одну"))
         # Число ВИДИМЫХ меняется и этими действиями, поэтому каждое
         # оборачивается в свой обработчик: сигнала notes_changed здесь мало,
         # он говорит только о создании и удалении.
@@ -613,46 +745,54 @@ class App:
 
         menu.addSeparator()
 
-        action_show = menu.addAction("Показать/скрыть все")
+        action_show = menu.addAction(i18n.tr("Показать/скрыть все"))
         action_show.triggered.connect(self._toggle_all_notes_visibility)
         self._tray_action_toggle = action_show
 
-        action_hide = menu.addAction("Скрыть все")
+        action_hide = menu.addAction(i18n.tr("Скрыть все"))
         action_hide.triggered.connect(self._hide_all_and_refresh)
 
         menu.addSeparator()
 
-        self._tray_action_search = menu.addAction("Поиск по заметкам")
+        self._tray_action_search = menu.addAction(
+            i18n.tr("Поиск по заметкам")
+        )
         self._tray_action_search.setShortcut("Ctrl+F")
         self._tray_action_search.triggered.connect(self.open_search)
 
         menu.addSeparator()
 
-        action_settings = menu.addAction("Настройки")
+        action_settings = menu.addAction(i18n.tr("Настройки"))
         action_settings.triggered.connect(self._open_settings)
 
         menu.addSeparator()
 
-        action_export_json = menu.addAction("Экспорт заметок (JSON)…")
+        action_export_json = menu.addAction(
+            i18n.tr("Экспорт заметок (JSON)…")
+        )
         action_export_json.triggered.connect(self._export_json)
 
-        action_export_html = menu.addAction("Экспорт заметок (HTML)…")
+        action_export_html = menu.addAction(
+            i18n.tr("Экспорт заметок (HTML)…")
+        )
         action_export_html.triggered.connect(self._export_html)
 
-        action_import = menu.addAction("Импорт заметок из JSON…")
+        action_import = menu.addAction(
+            i18n.tr("Импорт заметок из JSON…")
+        )
         action_import.triggered.connect(self._import_json)
 
-        action_backup = menu.addAction("Копия базы данных…")
+        action_backup = menu.addAction(i18n.tr("Копия базы данных…"))
         action_backup.triggered.connect(self._backup_database)
 
         menu.addSeparator()
 
         # «О программе» стоит рядом с «Выходом», а не в группе настроек:
         # это справка, а не параметр, и ищут её в самом низу меню.
-        action_about = menu.addAction("О программе")
+        action_about = menu.addAction(i18n.tr("О программе"))
         action_about.triggered.connect(self._open_about)
 
-        action_exit = menu.addAction("Выход")
+        action_exit = menu.addAction(i18n.tr("Выход"))
         action_exit.triggered.connect(self.quit)
 
         return menu
@@ -670,7 +810,7 @@ class App:
         QMessageBox.information(
             self.tray.parent() if self.tray else None,
             "Stickio",
-            "Заметок нет — выгружать нечего.",
+            i18n.tr("Заметок нет — выгружать нечего."),
         )
         return None
 
@@ -685,9 +825,9 @@ class App:
         if not notes:
             return
         path = self._ask_save_path(
-            "Экспорт заметок",
+            i18n.tr("Экспорт заметок"),
             transfer.default_export_name("json"),
-            "Файл заметок Stickio (*.json);;Все файлы (*)",
+            i18n.tr("Файл заметок Stickio (*.json);;Все файлы (*)"),
         )
         if not path:
             return
@@ -699,12 +839,14 @@ class App:
         except Exception as exc:
             logger.exception("Failed to export notes to %s", path)
             QMessageBox.warning(
-                None, "Экспорт заметок", "Не удалось сохранить файл:\n%s" % exc
+                None,
+                i18n.tr("Экспорт заметок"),
+                i18n.tr("Не удалось сохранить файл:\n%s") % exc,
             )
             return
         self._notify(
-            "Экспорт заметок",
-            "Сохранено заметок: %d\n%s" % (len(notes), path),
+            i18n.tr("Экспорт заметок"),
+            i18n.tr("Сохранено заметок: %d\n%s") % (len(notes), path),
         )
 
     def _export_html(self):
@@ -712,9 +854,9 @@ class App:
         if not notes:
             return
         path = self._ask_save_path(
-            "Экспорт заметок в HTML",
+            i18n.tr("Экспорт заметок в HTML"),
             transfer.default_export_name("html"),
-            "Веб-страница (*.html);;Все файлы (*)",
+            i18n.tr("Веб-страница (*.html);;Все файлы (*)"),
         )
         if not path:
             return
@@ -723,20 +865,22 @@ class App:
         except Exception as exc:
             logger.exception("Failed to export notes to %s", path)
             QMessageBox.warning(
-                None, "Экспорт заметок", "Не удалось сохранить файл:\n%s" % exc
+                None,
+                i18n.tr("Экспорт заметок"),
+                i18n.tr("Не удалось сохранить файл:\n%s") % exc,
             )
             return
         self._notify(
-            "Экспорт заметок",
-            "Сохранено заметок: %d\n%s" % (len(notes), path),
+            i18n.tr("Экспорт заметок"),
+            i18n.tr("Сохранено заметок: %d\n%s") % (len(notes), path),
         )
 
     def _import_json(self):
         path, _ = QFileDialog.getOpenFileName(
             None,
-            "Импорт заметок",
+            i18n.tr("Импорт заметок"),
             "",
-            "Файл заметок Stickio (*.json);;Все файлы (*)",
+            i18n.tr("Файл заметок Stickio (*.json);;Все файлы (*)"),
         )
         if not path:
             return
@@ -744,15 +888,18 @@ class App:
             records = transfer.read_export_file(path)
         except transfer.TransferError as exc:
             logger.warning("Import rejected: %s", exc)
-            QMessageBox.warning(None, "Импорт заметок", str(exc))
+            QMessageBox.warning(None, i18n.tr("Импорт заметок"), str(exc))
             return
 
         # Импорт не удаляет текущие заметки — он к ним добавляет.
         answer = QMessageBox.question(
             None,
-            "Импорт заметок",
-            "Добавить заметок из файла: %d?\n"
-            "Существующие заметки останутся на месте." % len(records),
+            i18n.tr("Импорт заметок"),
+            i18n.tr(
+                "Добавить заметок из файла: %d?\n"
+                "Существующие заметки останутся на месте."
+            )
+            % len(records),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -762,16 +909,21 @@ class App:
         created = self.manager.import_notes(records)
         if not created:
             QMessageBox.warning(
-                None, "Импорт заметок", "Не удалось добавить ни одной заметки."
+                None,
+                i18n.tr("Импорт заметок"),
+                i18n.tr("Не удалось добавить ни одной заметки."),
             )
             return
-        self._notify("Импорт заметок", "Добавлено заметок: %d" % len(created))
+        self._notify(
+            i18n.tr("Импорт заметок"),
+            i18n.tr("Добавлено заметок: %d") % len(created),
+        )
 
     def _backup_database(self):
         path = self._ask_save_path(
-            "Копия базы данных",
+            i18n.tr("Копия базы данных"),
             transfer.default_export_name("db"),
-            "База данных SQLite (*.db);;Все файлы (*)",
+            i18n.tr("База данных SQLite (*.db);;Все файлы (*)"),
         )
         if not path:
             return
@@ -781,11 +933,14 @@ class App:
             logger.exception("Failed to back up database to %s", path)
             QMessageBox.warning(
                 None,
-                "Копия базы данных",
-                "Не удалось создать копию:\n%s" % exc,
+                i18n.tr("Копия базы данных"),
+                i18n.tr("Не удалось создать копию:\n%s") % exc,
             )
             return
-        self._notify("Копия базы данных", "Сохранено:\n%s" % path)
+        self._notify(
+            i18n.tr("Копия базы данных"),
+            i18n.tr("Сохранено:\n%s") % path,
+        )
 
     def _notify(self, title: str, message: str):
         """Сообщение о результате: всплывающая подсказка трея, иначе диалог.
@@ -889,7 +1044,48 @@ class App:
             # При отмене mapping=None — вернутся сохранённые значения; при
             # исключении комбинации тоже восстановятся, а не пропадут.
             self.apply_hotkeys(changed)
+        # Язык переключается прямо в диалоге (иначе выбор не видно), а здесь
+        # его разносим по уже открытым окнам и меню трея. При «Отмене»
+        # диалог вернул прежний язык, и делать нечего.
+        self._apply_language()
         self._apply_save_delay()
+
+    def _apply_language(self):
+        """Переносит текущий язык на то, что уже открыто.
+
+        Окна заметок, панель оформления и окно поиска собирались на прежнем
+        языке, поэтому их надо переставить — иначе до перезапуска осталась
+        бы смесь языков. Пересоздавать окна нельзя: потерялись бы позиция,
+        прокрутка и несохранённый набор в редакторе.
+        """
+        language = i18n.current_language()
+        if language == self._language:
+            return
+        self._language = language
+        logger.info("Applying interface language: %s", language)
+
+        self.qt_translation.apply(language)
+
+        if self.tray is not None:
+            old_menu = self.tray.contextMenu()
+            self.tray.setContextMenu(self._build_tray_menu())
+            # Значок трея меню не удаляет — без этого старые меню копились бы
+            # при каждом переключении языка.
+            if old_menu is not None:
+                old_menu.deleteLater()
+            self._refresh_hotkey_labels()
+            self._refresh_note_count()
+
+        for window in list(self.manager.windows.values()):
+            try:
+                window.retranslate()
+            except Exception:
+                logger.exception(
+                    "Failed to retranslate note id=%s", window.note.id
+                )
+
+        if self._search_window is not None:
+            self._search_window.retranslate()
 
     def _apply_save_delay(self):
         """Разносит интервал автосохранения по уже открытым заметкам.

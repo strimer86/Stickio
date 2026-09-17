@@ -9,7 +9,7 @@
 ; это проверяет. Иначе инсталлятор и exe будут рассказывать о себе разное.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.1"
+  #define MyAppVersion "1.1.0"
 #endif
 
 #define MyAppName      "Stickio"
@@ -34,7 +34,7 @@ AppUpdatesURL={#MyAppURL}
 AppCopyright=© {#MyAppPublisher}
 ; Версия в ресурсе самого Setup.exe. AppVersion её не заполняет: без этой
 ; строки в свойствах файла установщика «Версия файла» пустая, а в
-; VS_FIXEDFILEINFO стоит 0.0.0.0 — при том что продукт заявляет 1.0.1.
+; VS_FIXEDFILEINFO стоит 0.0.0.0 — при том что продукт заявляет свою версию.
 VersionInfoVersion={#MyAppVersion}
 ; Права администратора по умолчанию: {autopf} тогда указывает на
 ; C:\Program Files, а не на %LOCALAPPDATA%\Programs. Это важно не только

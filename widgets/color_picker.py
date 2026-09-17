@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from services import i18n
+
 # Фон заметки: пастель. Заметки должны быть спокойными и не «съедать» текст.
 BACKGROUND_SWATCHES = [
     "#FFF4A8", "#FDE66C", "#FFD55E", "#FFC49B",
@@ -50,8 +52,13 @@ class ColorPicker(QWidget):
 
     color_selected = Signal(QColor)
 
-    def __init__(self, parent=None, title="Цвет", swatches=None):
+    def __init__(self, parent=None, title=None, swatches=None):
         super().__init__(parent)
+        # Подпись по умолчанию берём внутри, а не значением аргумента:
+        # значение по умолчанию вычисляется один раз при импорте модуля и
+        # застыло бы на языке, который был в тот момент.
+        if title is None:
+            title = i18n.tr("Цвет")
         self.setObjectName("picker")
         self.setStyleSheet(PICKER_STYLE)
         self._swatches = list(swatches if swatches is not None else BACKGROUND_SWATCHES)
@@ -75,10 +82,10 @@ class ColorPicker(QWidget):
             self._buttons[hex_color.lower()] = swatch
         layout.addLayout(grid)
 
-        self.custom_button = QPushButton("Свой цвет…")
+        self.custom_button = QPushButton(i18n.tr("Свой цвет…"))
         self.custom_button.setObjectName("customButton")
         self.custom_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.custom_button.setToolTip("Выбрать произвольный цвет")
+        self.custom_button.setToolTip(i18n.tr("Выбрать произвольный цвет"))
         self.custom_button.clicked.connect(self._choose_custom)
         layout.addWidget(self.custom_button)
 
@@ -102,7 +109,7 @@ class ColorPicker(QWidget):
 
     def _choose_custom(self):
         start = self._current if isinstance(self._current, QColor) else QColor("#FFFFFF")
-        color = QColorDialog.getColor(start, self, "Выбор цвета")
+        color = QColorDialog.getColor(start, self, i18n.tr("Выбор цвета"))
         if color.isValid():
             self.set_current(color)
             self.color_selected.emit(color)
@@ -152,9 +159,9 @@ class ColorPopup(QDialog):
         frame_layout.setContentsMargins(0, 0, 0, 0)
 
         if for_text:
-            title, swatches = "Цвет текста", TEXT_SWATCHES
+            title, swatches = i18n.tr("Цвет текста"), TEXT_SWATCHES
         else:
-            title, swatches = "Цвет фона", BACKGROUND_SWATCHES
+            title, swatches = i18n.tr("Цвет фона"), BACKGROUND_SWATCHES
         self.picker = ColorPicker(frame, title=title, swatches=swatches)
         self.picker.color_selected.connect(self._on_color)
         frame_layout.addWidget(self.picker)

@@ -4,8 +4,10 @@ Stickio — сайт stickio.tumioai.ru
 Что в этой папке
 ----------------
 
-  index.html                     главная страница
+  index.html                     главная страница, русская
   privacy.html                   политика конфиденциальности
+  en/index.html                  главная страница, английская
+  en/privacy.html                политика конфиденциальности, английская
   404.html                       страница «не найдено»
   robots.txt                     указания поисковым роботам
   sitemap.xml                    список страниц для индексации
@@ -23,6 +25,13 @@ Stickio — сайт stickio.tumioai.ru
                                  PNG остаются запасным вариантом, поэтому
                                  удалять их нельзя.
 
+Две языковые версии лежат рядом: русская в корне, английская в en/. Каталог
+называется en, а не ru и en, потому что адрес русской версии менять нельзя —
+она уже проиндексирована. Перекрёстные ссылки прописаны с обеих сторон:
+<link rel="alternate" hreflang="ru|en|x-default"> в <head> обеих главных и
+переключатель «EN» / «RU» в шапке. Картинки в en/ подключены от корня
+(/assets/...), а не относительно — иначе из /en/ они бы не нашлись.
+
 Каталог downloads/ на сервере должен существовать отдельно — в него
 кладётся установщик, в эту папку он не входит (33 МБ).
 
@@ -30,18 +39,32 @@ Stickio — сайт stickio.tumioai.ru
 Состояние на 17 сентября 2026
 -----------------------------
 
-Уже на сервере и проверено запросами снаружи:
+На сервере и проверено запросами снаружи:
 
-  установщик     35 047 986 байт, sha256 523553881c31c83658cab897dd1160c2
-                 fbfd58218c292be5d8086bb7a9f7a40e — совпадает с локальным
-                 dist/Stickio_Setup_1.0.1.exe побайтово;
-  страницы       index.html совпадает с локальным по sha256, privacy.html,
-                 404.html, robots.txt, sitemap.xml, favicon.ico — все 200;
+  установщик     35 068 947 байт, sha256 c4067e9bedd5a8e733cfda8b195e0e74
+                 ce2ab221f493a1a5ef2a7919cf773203
+                 downloads/Stickio_Setup_1.1.0.exe — скачан снаружи
+                 и совпал с dist/Stickio_Setup_1.1.0.exe побайтово;
+  страницы       index.html, 404.html, privacy.html, sitemap.xml, en/index.html,
+                 en/privacy.html — совпадают с локальными по sha256;
   assets/        все пять картинок и значок отдаются (200);
   битая ссылка   отдаёт 404 и фирменную страницу, а не заглушку nginx;
   сжатие         Content-Encoding: gzip на HTML;
+  заголовки      nosniff, Referrer-Policy и X-Frame-Options есть на HTML,
+                 на картинках и на установщике;
   редирект       http:// -> https:// отвечает 301;
-  IndexNow       адреса отправлены 17.09.2026, ответ 200.
+  IndexNow       адреса отправлены 17.09.2026 повторно, ответ 200.
+
+Установщик 1.0.1 с сервера удалён (кем — не я, время 14:49). Это ничего
+не сломало: ни одна живая страница на него не ссылалась, а ссылка в релизе
+v1.0.1 на GitHub ведёт на вложение самого релиза, а не на этот сайт.
+Восстанавливать не нужно, но и 1.1.0 удалять не стоит по той же причине.
+
+Исправленный конфиг nginx применён 17.09: на сервере лежала ПЕРВАЯ версия
+файла — та, где add_header в location отменял наследование, и на HTML,
+картинках и установщике заголовков безопасности не было вовсе. Проверено
+после reload: заголовки появились везде. Копия прежнего файла на сервере —
+stickio.tumioai.ru.conf.bak-20260917.
 
 Осталось (делается руками в браузере, снаружи не проверяется):
 
@@ -91,15 +114,17 @@ HTTP/2 включает, но проверить это отсюда нечем.
   sudo find /var/www/stickio.tumioai.ru -type d -exec chmod 755 {} \;
   sudo find /var/www/stickio.tumioai.ru -type f -exec chmod 644 {} \;
 
-Свежий установщик положить в downloads (на сервере версия от 17.09 была
-старше — 35 047 982 байта вместо 35 047 986):
+Свежий установщик положить в downloads (файлы не перезаписывают друг
+друга, в имени есть версия):
 
-  scp dist/Stickio_Setup_1.0.1.exe \
+  scp dist/Stickio_Setup_1.1.0.exe \
       root@5.44.40.47:/var/www/stickio.tumioai.ru/downloads/
 
 
 Конфигурация nginx
 ------------------
+
+Уже применена 17.09.2026, повторять не нужно. Если будете менять файл заново:
 
   sudo cp /etc/nginx/sites-available/stickio.tumioai.ru{,.bak}
   sudo cp stickio.tumioai.ru.conf /etc/nginx/sites-available/stickio.tumioai.ru
@@ -187,11 +212,29 @@ Search Console.
   curl -sI https://stickio.tumioai.ru/sitemap.xml       # 200
   curl -sI https://stickio.tumioai.ru/favicon.ico       # 200
   curl -sI https://stickio.tumioai.ru/privacy.html      # 200
+  curl -sI https://stickio.tumioai.ru/en/               # 200
+  curl -sI https://stickio.tumioai.ru/en/privacy.html   # 200
   curl -sI https://stickio.tumioai.ru/нет-такой         # 404 + страница сайта
   curl -sI https://stickio.tumioai.ru/assets/og-stickio.png  # 200
   curl -s  https://stickio.tumioai.ru/ | grep -c canonical   # 1
   curl -sI http://stickio.tumioai.ru/ | head -1         # 301 на https
   curl -s https://stickio.tumioai.ru/ | grep -o 'application/ld+json' # есть разметка
+
+Заголовки безопасности (nosniff, Referrer-Policy, X-Frame-Options) должны
+быть на всех четырёх типах ответа — иначе снова вернулась ошибка с
+наследованием add_header:
+
+  for u in / /index.html /privacy.html /en/ /assets/og-stickio.png \
+           /downloads/Stickio_Setup_1.1.0.exe; do
+    echo "--- $u"
+    curl -sI "https://stickio.tumioai.ru$u" | grep -i "nosniff\|referrer\|x-frame"
+  done
+
+Установщик скачать снаружи и сверить сумму — иначе неизвестно, целый ли
+файл доехал:
+
+  curl -o setup.exe https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe
+  sha256sum setup.exe   # c4067e9b…773203
 
 Проверка разметки для поисковиков:
   https://validator.schema.org/#url=https%3A%2F%2Fstickio.tumioai.ru%2F

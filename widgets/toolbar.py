@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QSlider, QSpinBox, QWidget,
 )
 
+from services import i18n
 from widgets.color_picker import ColorPopup
 
 # Высота одной кнопки. Меньше 24 — у B/A/«14» текст уезжает вверх из-за
@@ -148,7 +149,6 @@ class Toolbar(QWidget):
         # кто первым зовёт setFixedSize/move.
         self.background_button = _SwatchButton()
         self.background_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.background_button.setToolTip("Цвет фона")
         self.background_button.setFixedSize(40, BTN_H)
         self.background_button.clicked.connect(self._choose_background)
         grid.addWidget(self.background_button, 0, 0)
@@ -156,7 +156,6 @@ class Toolbar(QWidget):
         self.text_color_button = QPushButton("A")
         self.text_color_button.setObjectName("textColorButton")
         self.text_color_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.text_color_button.setToolTip("Цвет текста")
         self.text_color_button.setFixedSize(BTN_H, BTN_H)
         self.text_color_button.clicked.connect(self._choose_text_color)
         grid.addWidget(self.text_color_button, 0, 1)
@@ -164,7 +163,6 @@ class Toolbar(QWidget):
         self.font_minus = QPushButton("\u2212")
         self.font_minus.setObjectName("stepButton")
         self.font_minus.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.font_minus.setToolTip("Уменьшить текст")
         self.font_minus.setFixedSize(BTN_H, BTN_H)
         grid.addWidget(self.font_minus, 0, 2)
 
@@ -173,7 +171,6 @@ class Toolbar(QWidget):
         self.font_size_spin.setValue(18)
         self.font_size_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.font_size_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.font_size_spin.setToolTip("Размер шрифта")
         self.font_size_spin.setContentsMargins(0, 0, 0, 0)
         # Размер шрифта обязан совпадать с «B»/«A» (13px). QSpinBox центрирует
         # текст внутри своего lineEdit, а QPushButton — относительно всей
@@ -197,7 +194,6 @@ class Toolbar(QWidget):
         self.font_plus = QPushButton("+")
         self.font_plus.setObjectName("stepButton")
         self.font_plus.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.font_plus.setToolTip("Увеличить текст")
         self.font_plus.setFixedSize(BTN_H, BTN_H)
         self.font_plus.clicked.connect(self.font_size_spin.stepUp)
         grid.addWidget(self.font_plus, 0, 4)
@@ -207,7 +203,6 @@ class Toolbar(QWidget):
         self.bold_button.setCheckable(True)
         self.bold_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_button.setFixedSize(BTN_H, BTN_H)
-        self.bold_button.setToolTip("Жирный")
         self.bold_button.toggled.connect(self.bold_toggled)
         grid.addWidget(self.bold_button, 0, 5)
 
@@ -216,14 +211,12 @@ class Toolbar(QWidget):
         self.delete_button.setIcon(trash_icon("#ffffff"))
         self.delete_button.setIconSize(QSize(12, 12))
         self.delete_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.delete_button.setToolTip("Удалить заметку")
         self.delete_button.setFixedSize(BTN_H + 4, BTN_H)
         self.delete_button.clicked.connect(self.delete_requested)
         grid.addWidget(self.delete_button, 0, 6)
 
         # --- нижняя строка: прозрачность ------------------------------
-        self.opacity_title = QLabel("Прозрачность")
-        self.opacity_title.setToolTip("Прозрачность заметки")
+        self.opacity_title = QLabel()
         self.opacity_title.setMinimumWidth(82)
         grid.addWidget(self.opacity_title, 1, 0, 1, 2)
 
@@ -233,7 +226,6 @@ class Toolbar(QWidget):
         self.opacity_slider.setMinimumWidth(60)
         self.opacity_slider.setMaximumWidth(110)
         self.opacity_slider.setFixedHeight(BTN_H)
-        self.opacity_slider.setToolTip("Прозрачность")
         self.opacity_slider.valueChanged.connect(self._update_opacity_label)
         self.opacity_slider.valueChanged.connect(self.opacity_changed)
         grid.addWidget(self.opacity_slider, 1, 2, 1, 3)
@@ -247,6 +239,10 @@ class Toolbar(QWidget):
 
         for column in range(7):
             grid.setColumnStretch(column, 0)
+
+        # Подписи ставим одним вызовом, а не по месту создания кнопок:
+        # смена языка переиспользует ровно этот же код.
+        self.retranslate()
 
         self.set_background_color(QColor("#FFF4A8"))
         self.set_text_color(QColor("#222222"))
@@ -266,11 +262,37 @@ class Toolbar(QWidget):
         painter.setPen(QColor(0, 0, 0, 110))
         painter.drawPath(path)
 
+    def retranslate(self):
+        """Ставит подписи панели под текущий язык интерфейса.
+
+        Панель целиком состоит из подсказок, поэтому перевести её дешевле,
+        чем пересоздать: пересоздание потеряло бы подобранный размер и
+        положение относительно заметки.
+        """
+        self.background_button.setToolTip(i18n.tr("Цвет фона"))
+        self.text_color_button.setToolTip(i18n.tr("Цвет текста"))
+        self.font_minus.setToolTip(i18n.tr("Уменьшить текст"))
+        self.font_size_spin.setToolTip(i18n.tr("Размер шрифта"))
+        self.font_plus.setToolTip(i18n.tr("Увеличить текст"))
+        self.bold_button.setToolTip(i18n.tr("Жирный"))
+        self.delete_button.setToolTip(i18n.tr("Удалить заметку"))
+        self.opacity_title.setText(i18n.tr("Прозрачность"))
+        self.opacity_title.setToolTip(i18n.tr("Прозрачность заметки"))
+        self.opacity_slider.setToolTip(i18n.tr("Прозрачность"))
+        # В подсказках образцов есть и сам цвет — их надо переставить заново,
+        # иначе там остался бы прежний язык.
+        if getattr(self, "_current_background", None) is not None:
+            self.set_background_color(self._current_background)
+        if getattr(self, "_current_text", None) is not None:
+            self.set_text_color(self._current_text)
+
     # --- синхронизация состояния --------------------------------------
     def set_background_color(self, color: QColor):
         name = color.name()
         self.background_button.set_swatch_color(color)
-        self.background_button.setToolTip("Цвет фона — %s" % name.upper())
+        self.background_button.setToolTip(
+            i18n.tr("Цвет фона — %s") % name.upper()
+        )
 
     def set_text_color(self, color: QColor):
         name = color.name()
@@ -279,7 +301,9 @@ class Toolbar(QWidget):
             " background: #ffffff; border: 1px solid rgba(0,0,0,95);"
             " border-radius: 5px;" % name
         )
-        self.text_color_button.setToolTip("Цвет текста — %s" % name.upper())
+        self.text_color_button.setToolTip(
+            i18n.tr("Цвет текста — %s") % name.upper()
+        )
 
     def set_bold_checked(self, checked: bool):
         self.bold_button.blockSignals(True)

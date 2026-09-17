@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
 )
 
+from services import i18n
 from services.app_info import (
     APP_AUTHOR, APP_NAME, APP_SITE, APP_SITE_LABEL, APP_TAGLINE,
     app_version, copyright_line,
@@ -29,7 +30,7 @@ class AboutDialog(QDialog):
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
-        self.setWindowTitle("О программе")
+        self.setWindowTitle(i18n.tr("О программе"))
 
         icon = create_app_icon()
         self.setWindowIcon(icon)
@@ -59,12 +60,15 @@ class AboutDialog(QDialog):
         self.name_label.setFont(name_font)
         texts.addWidget(self.name_label)
 
-        self.tagline_label = QLabel(APP_TAGLINE)
+        # Подзаголовок переводим при создании окна, а не при импорте
+        # модуля: константа одна на всё приложение и застыла бы на языке,
+        # который был первым.
+        self.tagline_label = QLabel(i18n.tr(APP_TAGLINE))
         texts.addWidget(self.tagline_label)
 
         texts.addSpacing(6)
 
-        self.author_label = QLabel("Автор: %s" % APP_AUTHOR)
+        self.author_label = QLabel(i18n.tr("Автор: %s") % APP_AUTHOR)
         texts.addWidget(self.author_label)
 
         self.site_label = QLabel(
@@ -86,6 +90,8 @@ class AboutDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         # Стандартная подпись кнопки приходит из перевода Qt, а он может
         # быть не загружен — тогда кнопка осталась бы английской.
-        buttons.button(QDialogButtonBox.StandardButton.Close).setText("Закрыть")
+        buttons.button(QDialogButtonBox.StandardButton.Close).setText(
+            i18n.tr("Закрыть")
+        )
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

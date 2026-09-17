@@ -10,8 +10,8 @@
 # filevers/prodvers — кортеж из ЧЕТЫРЁХ чисел: major, minor, patch, build.
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 1, 0),
-    prodvers=(1, 0, 1, 0),
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -27,12 +27,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'Т.Е.А.'),
             StringStruct('FileDescription', 'Stickio — заметки на рабочем столе'),
-            StringStruct('FileVersion', '1.0.1.0'),
+            StringStruct('FileVersion', '1.1.0.0'),
             StringStruct('InternalName', 'Stickio'),
             StringStruct('LegalCopyright', '© Т.Е.А.'),
             StringStruct('OriginalFilename', 'Stickio.exe'),
             StringStruct('ProductName', 'Stickio'),
-            StringStruct('ProductVersion', '1.0.1.0'),
+            StringStruct('ProductVersion', '1.1.0.0'),
             StringStruct('Comments', 'https://stickio.tumioai.ru'),
           ],
         ),

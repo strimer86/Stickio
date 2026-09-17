@@ -12,6 +12,8 @@ import json
 import logging
 from datetime import datetime
 
+from services import i18n
+
 logger = logging.getLogger(__name__)
 
 # Формат файла. Номер нужен, чтобы будущий импорт отличал свои файлы от
@@ -46,6 +48,46 @@ _NUMERIC_FIELDS = {
 }
 
 _TITLE = "Заметки Stickio"
+
+# Разметка выгрузки. Каркас и карточка лежат отдельными шаблонами, а не одной
+# строкой на сто с лишним символов, потому что переводить их целиком нельзя:
+# в перевод попал бы CSS, а он от языка не зависит. Переводится только то,
+# что видно на странице, и подставляется уже готовым текстом.
+_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<style>
+  body {{ background: #f2f2f2; color: #222; margin: 0; padding: 24px;
+         font-family: "Segoe UI", Arial, sans-serif; }}
+  h1 {{ font-size: 20px; margin: 0 0 4px; }}
+  .subtitle {{ color: #666; font-size: 13px; margin-bottom: 20px; }}
+  .grid {{ display: flex; flex-wrap: wrap; gap: 16px; }}
+  .note {{ width: 300px; min-height: 140px; padding: 14px;
+          border-radius: 10px; border: 1px solid rgba(0,0,0,0.25);
+          box-sizing: border-box; display: flex; flex-direction: column; }}
+  .note pre {{ margin: 0 0 12px; white-space: pre-wrap; word-wrap: break-word;
+              font: inherit; flex: 1; }}
+  .meta {{ font-size: 11px; opacity: 0.6; }}
+</style>
+</head>
+<body>
+<h1>{title}</h1>
+<div class="subtitle">{subtitle}</div>
+<div class="grid">
+{cards}
+</div>
+</body>
+</html>
+"""
+
+_CARD_TEMPLATE = (
+    '<article class="note" style="background: {bg}; color: {fg};">'
+    "<pre>{text}</pre>"
+    '<div class="meta">{font}&nbsp;· {weight}&nbsp;· {opacity}%</div>'
+    "</article>"
+)
 
 
 class TransferError(Exception):
@@ -85,7 +127,7 @@ def note_from_dict(raw) -> dict:
     потом ловить это при отрисовке.
     """
     if not isinstance(raw, dict):
-        raise TransferError("Запись заметки должна быть объектом.")
+        raise TransferError(i18n.tr("Запись заметки должна быть объектом."))
 
     fields = {}
     for name in EXPORT_FIELDS:
@@ -98,13 +140,15 @@ def note_from_dict(raw) -> dict:
                 value = caster(value)
             except (TypeError, ValueError):
                 raise TransferError(
-                    "Недопустимое значение поля «%s»: %r" % (name, raw[name])
+                    i18n.tr("Недопустимое значение поля «%s»: %r")
+                    % (name, raw[name])
                 )
         elif name == "bold":
             value = bool(value)
         elif not isinstance(value, str):
             raise TransferError(
-                "Недопустимое значение поля «%s»: %r" % (name, raw[name])
+                i18n.tr("Недопустимое значение поля «%s»: %r")
+                % (name, raw[name])
             )
         fields[name] = value
 
@@ -120,21 +164,22 @@ def parse_export(data) -> list[dict]:
         TransferError: файл не является экспортом Stickio или повреждён.
     """
     if not isinstance(data, dict):
-        raise TransferError("Это не файл экспорта Stickio.")
+        raise TransferError(i18n.tr("Это не файл экспорта Stickio."))
     if data.get("format") != EXPORT_FORMAT:
-        raise TransferError("Это не файл экспорта Stickio.")
+        raise TransferError(i18n.tr("Это не файл экспорта Stickio."))
 
     version = data.get("version", 0)
     if not isinstance(version, int) or version > EXPORT_VERSION:
         raise TransferError(
-            "Файл создан более новой версией Stickio (версия %s)." % (version,)
+            i18n.tr("Файл создан более новой версией Stickio (версия %s).")
+            % (version,)
         )
 
     notes = data.get("notes")
     if not isinstance(notes, list):
-        raise TransferError("В файле нет списка заметок.")
+        raise TransferError(i18n.tr("В файле нет списка заметок."))
     if not notes:
-        raise TransferError("В файле нет ни одной заметки.")
+        raise TransferError(i18n.tr("В файле нет ни одной заметки."))
 
     return [note_from_dict(item) for item in notes]
 
@@ -154,57 +199,31 @@ def plain_text(content: str) -> str:
 
 
 def build_html(notes) -> str:
-    """Читаемая выгрузка заметок: один файл, открывается в браузере."""
+    """Читаемая выгрузка заметок: один файл, открывается в браузере.
+
+    Язык страницы берётся из текущего языка интерфейса: выгрузка — это то,
+    что пользователь откроет и покажет другому человеку, и смесь языков
+    («Exported 17.09.2026 · заметок: 3») читалась бы как недоделка.
+    """
     exported = datetime.now().strftime("%d.%m.%Y %H:%M")
     cards = []
     for note in notes:
-        text = plain_text(note.content) or "(пусто)"
+        text = plain_text(note.content) or i18n.tr("(пусто)")
         cards.append(
-            '<article class="note" style="background: {bg}; color: {fg};">'
-            '<pre>{text}</pre>'
-            '<div class="meta">Шрифт {size} пт{nbsp}· {bold}{nbsp}· {opacity}%</div>'
-            "</article>".format(
+            _CARD_TEMPLATE.format(
                 bg=html_module.escape(str(note.background_color), quote=True),
                 fg=html_module.escape(str(note.text_color), quote=True),
                 text=html_module.escape(text),
-                size=note.font_size,
-                bold="жирный" if note.bold else "обычный",
+                font=i18n.tr("Шрифт %s пт") % note.font_size,
+                weight=i18n.tr("жирный") if note.bold else i18n.tr("обычный"),
                 opacity=round(float(note.opacity) * 100),
-                nbsp="&nbsp;",
             )
         )
 
-    return """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<title>{title}</title>
-<style>
-  body {{ background: #f2f2f2; color: #222; margin: 0; padding: 24px;
-         font-family: "Segoe UI", Arial, sans-serif; }}
-  h1 {{ font-size: 20px; margin: 0 0 4px; }}
-  .subtitle {{ color: #666; font-size: 13px; margin-bottom: 20px; }}
-  .grid {{ display: flex; flex-wrap: wrap; gap: 16px; }}
-  .note {{ width: 300px; min-height: 140px; padding: 14px;
-          border-radius: 10px; border: 1px solid rgba(0,0,0,0.25);
-          box-sizing: border-box; display: flex; flex-direction: column; }}
-  .note pre {{ margin: 0 0 12px; white-space: pre-wrap; word-wrap: break-word;
-              font: inherit; flex: 1; }}
-  .meta {{ font-size: 11px; opacity: 0.6; }}
-</style>
-</head>
-<body>
-<h1>{title}</h1>
-<div class="subtitle">Выгружено {exported} · заметок: {count}</div>
-<div class="grid">
-{cards}
-</div>
-</body>
-</html>
-""".format(
-        title=_TITLE,
-        exported=exported,
-        count=len(notes),
+    return _HTML_TEMPLATE.format(
+        lang=i18n.current_language(),
+        title=i18n.tr(_TITLE),
+        subtitle=i18n.tr("Выгружено %s · заметок: %d") % (exported, len(notes)),
         cards="\n".join(cards),
     )
 
@@ -221,9 +240,9 @@ def read_export_file(path: str) -> list[dict]:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, UnicodeDecodeError) as exc:
-        raise TransferError("Не удалось прочитать файл: %s" % exc)
+        raise TransferError(i18n.tr("Не удалось прочитать файл: %s") % exc)
     except json.JSONDecodeError as exc:
-        raise TransferError("Файл не является корректным JSON: %s" % exc)
+        raise TransferError(i18n.tr("Файл не является корректным JSON: %s") % exc)
     return parse_export(data)
 
 

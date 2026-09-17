@@ -315,25 +315,48 @@ class SettingsDialogNoteTests(unittest.TestCase):
         for spin in (dialog.width_spin, dialog.height_spin):
             self.assertEqual((spin.minimum(), spin.maximum()), (low, high))
 
-    def test_size_row_fits_value_column(self):
-        """Строка «ширина × высота» не должна вылезать за колонку значений.
+    def test_size_spinboxes_are_wide_enough_for_their_values(self):
+        """В строке «ширина × высота» должно быть видно само значение.
 
-        Проверяем замером, а не на глаз: знак «×» занимает 12 px, и ошибка
-        на пару пикселей в его ширине уже выводила строку за правый край.
+        Раньше поля вписывались в колонку значений (110 px), а спинбоксу
+        с надписью « пт» нужно около 106 px: два таких поля со знаком «×»
+        в колонку не влезали, поле ввода сжималось до нуля, и от строки
+        оставались одни кнопки со стрелками. Проверяем замером: у спинбокса
+        своя ширина по sizeHint, а внутри — непустое поле ввода.
         """
-        from PySide6.QtCore import QPoint
-
-        from app import FIELD_COLUMN_WIDTH
+        from PySide6.QtWidgets import QLineEdit
 
         dialog = self._dialog()
         dialog.adjustSize()
-        column_left = dialog.font_size_spin.mapTo(dialog, QPoint(0, 0)).x()
+        for spin in (dialog.width_spin, dialog.height_spin):
+            field = spin.findChild(QLineEdit)
+            self.assertIsNotNone(field, "у спинбокса нет поля ввода")
+            self.assertGreaterEqual(spin.width(), spin.sizeHint().width())
+            self.assertGreater(field.width(), 0, "поле ввода сжато до нуля")
+
+    def test_size_row_stays_inside_the_dialog(self):
+        """Строка размера не должна вылезать за правый край диалога.
+
+        Диалог расширяется под эту строку сам, поэтому проверяем не
+        попадание в колонку значений, а то, что он вырос достаточно.
+        """
+        from PySide6.QtCore import QPoint
+
+        dialog = self._dialog()
+        dialog.adjustSize()
         row_right = (
             dialog.height_spin.mapTo(dialog, QPoint(0, 0)).x()
             + dialog.height_spin.width()
         )
-        self.assertLessEqual(row_right, column_left + FIELD_COLUMN_WIDTH)
-        # левое поле пары стоит в общей колонке, а не смещено
+        self.assertLessEqual(row_right, dialog.width())
+
+    def test_size_row_keeps_the_value_column_edge(self):
+        """Первое поле пары стоит в общей колонке, а не смещено."""
+        from PySide6.QtCore import QPoint
+
+        dialog = self._dialog()
+        dialog.adjustSize()
+        column_left = dialog.font_size_spin.mapTo(dialog, QPoint(0, 0)).x()
         self.assertEqual(
             dialog.width_spin.mapTo(dialog, QPoint(0, 0)).x(), column_left
         )

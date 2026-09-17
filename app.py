@@ -259,8 +259,8 @@ class SettingsDialog(QDialog):
     def _size_spins(saved_note: dict) -> tuple:
         """Пара спинбоксов «ширина × высота» для новой заметки.
 
-        Фактическую ширину полей выставляет `_fit_size_row` — по `sizeHint`
-        виджетов (см. там же, почему нельзя обойтись константой).
+        Ширину полей не задаём: её считает раскладка по sizeHint виджета,
+        см. `_size_row`.
         """
         low, high = NOTE_SIZE_RANGE
         spins = []
@@ -277,25 +277,20 @@ class SettingsDialog(QDialog):
 
     @staticmethod
     def _size_row(width_spin: QSpinBox, height_spin: QSpinBox) -> QHBoxLayout:
-        """Строка «ширина × высота», вписанная в колонку значений.
+        """Строка «ширина × высота» для новой заметки.
 
-        Собирается целиком здесь, потому что ширину полей нужно считать по
-        фактической ширине знака «×»: замерено 12 px, и ошибка в 4 px уже
-        выводила строку за правый край колонки.
+        Ширину полей не задаём: спинбокс берёт её сам по sizeHint. Раньше
+        он вписывался в колонку значений (110 px) — двум полям с надписью
+        « пт» там места нет, поле ввода сжималось до нуля, и вместо
+        «380 пт × 300 пт» оставались одни кнопки со стрелками. Колонка
+        значений от этого стала шире, зато значение видно.
         """
-        spacing = 6
-        sign = QLabel("×")
-        spare = FIELD_COLUMN_WIDTH - sign.sizeHint().width() - 2 * spacing
-        each = max(30, spare // 2)
-
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(spacing)
-        for spin in (width_spin, height_spin):
-            spin.setFixedWidth(each)
-            row.addWidget(spin)
-            if spin is width_spin:
-                row.addWidget(sign)
+        row.setSpacing(6)
+        row.addWidget(width_spin)
+        row.addWidget(QLabel("×"))
+        row.addWidget(height_spin)
         row.addStretch(1)
         return row
 

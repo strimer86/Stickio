@@ -130,6 +130,10 @@ PYTHONPATH=. python -m unittest discover -s tests
 | Сайт | `site/` |
 | Сборка картинок для сайта и промо | `tools/` |
 
+## История изменений
+
+Что менялось от версии к версии — в [CHANGELOG.md](CHANGELOG.md).
+
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE). Коротко: код можно свободно использовать,

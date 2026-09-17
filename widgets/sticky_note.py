@@ -6,7 +6,7 @@ from PySide6.QtCore import (
     Qt, QEvent, QPoint, QRectF, QTimer, Signal,
 )
 from PySide6.QtGui import (
-    QColor, QIcon, QPainter, QPainterPath, QTextCharFormat, QTextCursor,
+    QColor, QIcon, QPainter, QPainterPath, QPixmap, QTextCharFormat, QTextCursor,
 )
 from PySide6.QtWidgets import (
     QHBoxLayout, QMessageBox, QPushButton, QTextEdit, QVBoxLayout, QWidget,
@@ -33,6 +33,36 @@ def load_app_icon():
     icon_path = os.path.join(base, "Noteit.ico")
     if os.path.exists(icon_path):
         APP_ICON = QIcon(icon_path)
+
+
+def create_app_icon() -> QIcon:
+    """Иконка приложения, с нарисованной заменой.
+
+    Если Noteit.ico не нашёлся (запуск из неожиданного места, сборка без
+    ресурсов), рисуем жёлтый стикер сами: пустая иконка в трее выглядит
+    как сломанная программа, а заметку тогда не найти.
+    """
+    if not APP_ICON.isNull():
+        return APP_ICON
+
+    pixmap = QPixmap(64, 64)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(QColor("#FFD55E"))
+    painter.setPen(QColor("#E0B23A"))
+    painter.drawRoundedRect(4, 4, 56, 56, 10, 10)
+
+    painter.setPen(QColor("#222222"))
+    for y in (24, 32, 40):
+        painter.drawLine(18, y, 46, y)
+    painter.setPen(QColor("#222222"))
+    painter.drawLine(18, 52, 36, 52)
+    painter.end()
+
+    return QIcon(pixmap)
+
 
 EDGE = 10
 MIN_WIDTH = 180

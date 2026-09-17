@@ -13,8 +13,10 @@
 #endif
 
 #define MyAppName      "Stickio"
-#define MyAppPublisher "Stickio"
+#define MyAppPublisher "Т.Е.А."
 #define MyAppExeName   "Stickio.exe"
+; Сайт автора. Показывается в мастере установки и в «Установленные приложения».
+#define MyAppURL       "https://stickio.tumioai.ru"
 ; Совпадает с RUN_KEY в services/settings.py
 #define RunKey         "Software\Microsoft\Windows\CurrentVersion\Run"
 
@@ -26,6 +28,10 @@ AppVersion={#MyAppVersion}
 ; «Установленные приложения». Без него там будет только имя.
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+AppCopyright=© {#MyAppPublisher}
 ; Права администратора по умолчанию: {autopf} тогда указывает на
 ; C:\Program Files, а не на %LOCALAPPDATA%\Programs. Это важно не только
 ; ради порядка — программа, живущая в AppData, выглядит для поведенческой

@@ -2,7 +2,7 @@ import json
 import logging
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSpinBox,
@@ -17,9 +17,11 @@ from services.settings import (
     DEFAULT_HOTKEYS, DEFAULT_NOTE_SETTINGS, DEFAULT_SAVE_DELAY_MS,
     FONT_SIZE_RANGE, HOTKEY_LABELS, NOTE_SIZE_RANGE, SAVE_DELAY_RANGE, Settings,
 )
+from widgets.about_dialog import AboutDialog
 from widgets.color_picker import ColorPopup
 from widgets.hotkey_edit import HotkeyEdit
 from widgets.search_window import SearchWindow
+from widgets.sticky_note import create_app_icon
 from widgets.toolbar import place_popup
 
 logger = logging.getLogger(__name__)
@@ -32,30 +34,6 @@ LABEL_COLUMN_WIDTH = 168
 # Ширина колонки значений. Одна на все поля: образец цвета — кнопка 64 px,
 # спинбокс — 90, и разная ширина читается как «элементы разъехались».
 FIELD_COLUMN_WIDTH = 110
-
-
-def create_app_icon() -> QIcon:
-    from widgets.sticky_note import APP_ICON
-    if not APP_ICON.isNull():
-        return APP_ICON
-
-    pixmap = QPixmap(64, 64)
-    pixmap.fill(Qt.GlobalColor.transparent)
-
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setBrush(QColor("#FFD55E"))
-    painter.setPen(QColor("#E0B23A"))
-    painter.drawRoundedRect(4, 4, 56, 56, 10, 10)
-
-    painter.setPen(QColor("#222222"))
-    for y in (24, 32, 40):
-        painter.drawLine(18, y, 46, y)
-    painter.setPen(QColor("#222222"))
-    painter.drawLine(18, 52, 36, 52)
-    painter.end()
-
-    return QIcon(pixmap)
 
 
 def menu_label(text: str, shortcut: str) -> str:
@@ -613,6 +591,17 @@ class App:
         # забыть, и число в подсказке расходилось бы с реальностью.
         self.manager.notes_changed.connect(self._refresh_note_count)
 
+        self.tray.setContextMenu(self._build_tray_menu())
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _build_tray_menu(self) -> QMenu:
+        """Меню трея.
+
+        Вынесено из _setup_tray отдельным методом, чтобы проверялось тестом:
+        создать значок в трее в тестовой среде нельзя, а собрать меню и
+        посмотреть его пункты — можно.
+        """
         menu = QMenu()
 
         # Подписи с комбинациями ставятся в _refresh_hotkey_labels: после
@@ -663,12 +652,16 @@ class App:
 
         menu.addSeparator()
 
+        # «О программе» стоит рядом с «Выходом», а не в группе настроек:
+        # это справка, а не параметр, и ищут её в самом низу меню.
+        action_about = menu.addAction("О программе")
+        action_about.triggered.connect(self._open_about)
+
         action_exit = menu.addAction("Выход")
         action_exit.triggered.connect(self.quit)
 
-        self.tray.setContextMenu(menu)
-        self.tray.activated.connect(self._on_tray_activated)
-        self.tray.show()
+        return menu
+
     # --- Экспорт, импорт и копии базы ---------------------------------
     #
     # Всё это живёт в меню трея, а не в настройках: это действия «сделать
@@ -878,6 +871,15 @@ class App:
             # Заметку открыли, но подсветить нечего (текст изменили после
             # поиска) — окно всё равно всплыло бы, а курсор стоял бы не там.
             window.clear_highlight()
+
+    def _open_about(self):
+        """Окно «О программе».
+
+        Комбинации клавиш на время показа не снимаем, как в настройках:
+        вводить здесь нечего, а нажатая Ctrl+Shift+N просто создаст заметку
+        за диалогом — ничего не сломается.
+        """
+        AboutDialog().exec()
 
     def _open_settings(self):
         # Пока открыт диалог, системные комбинации снимаем: иначе набор

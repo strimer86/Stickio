@@ -10,8 +10,9 @@ echo.
 
 cd /d "%~dp0"
 
-rem Версия приложения. ЕДИНСТВЕННОЕ место, где она задаётся: отсюда уходит
-rem и в метаданные exe (сверяется с version_info.txt), и в инсталлятор.
+rem Версия приложения. ЕДИНСТВЕННОЕ место, где она задаётся для сборки:
+rem отсюда уходит и в метаданные exe (сверяется с version_info.txt), и в
+rem инсталлятор.
 set "APP_VERSION=1.0.1"
 
 rem Иконка — нарисованный вручную Noteit.ico в корне, его берут и сборщик
@@ -40,9 +41,12 @@ if %ICON_SIZE% LSS 50000 (
 )
 echo [1/4] Иконка на месте: Noteit.ico (%ICON_SIZE% байт)
 
-rem Версия живёт в двух файлах: в APP_VERSION выше и в version_info.txt
-rem (метаданные exe). Расходятся они молча — инсталлятор показал бы одну
-rem версию, а свойства файла другую. Поэтому проверяем и останавливаемся.
+rem Версия живёт в трёх местах: APP_VERSION здесь, version_info.txt
+rem (метаданные exe) и services\app_info.py (VERSION_FALLBACK — для запуска
+rem из исходников). Расходятся они молча: инсталлятор показал бы одну
+rem версию, свойства файла другую, а окно «О программе» третью. Поэтому
+rem сверяем то, что проверяется здесь, и останавливаемся при расхождении;
+rem пару version_info.txt <-> app_info.py проверяет tests\test_app_info.py.
 findstr /c:"%APP_VERSION%.0" version_info.txt >nul
 if errorlevel 1 (
     echo [2/4] [ERROR] Версия в version_info.txt не совпадает с APP_VERSION=%APP_VERSION%.

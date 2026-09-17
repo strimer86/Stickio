@@ -5,6 +5,8 @@
 #
 # ВАЖНО: версию здесь и в installer\ModernStickyNotes.iss (MyAppVersion)
 # надо держать одинаковой — build.bat это проверяет и падает при расхождении.
+# Та же версия лежит в services\app_info.py (VERSION_FALLBACK) для запуска
+# из исходников; совпадение проверяет тест tests\test_app_info.py.
 # filevers/prodvers — кортеж из ЧЕТЫРЁХ чисел: major, minor, patch, build.
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -23,14 +25,15 @@ VSVersionInfo(
         StringTable(
           '041904B0',
           [
-            StringStruct('CompanyName', 'Stickio'),
+            StringStruct('CompanyName', 'Т.Е.А.'),
             StringStruct('FileDescription', 'Stickio — заметки на рабочем столе'),
             StringStruct('FileVersion', '1.0.1.0'),
             StringStruct('InternalName', 'Stickio'),
-            StringStruct('LegalCopyright', 'Stickio'),
+            StringStruct('LegalCopyright', '© Т.Е.А.'),
             StringStruct('OriginalFilename', 'Stickio.exe'),
             StringStruct('ProductName', 'Stickio'),
             StringStruct('ProductVersion', '1.0.1.0'),
+            StringStruct('Comments', 'https://stickio.tumioai.ru'),
           ],
         ),
       ]

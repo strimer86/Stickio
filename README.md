@@ -12,7 +12,7 @@
 ## Скачать
 
 - **Сайт:** <https://stickio.tumioai.ru>
-- **Установщик:** [Stickio_Setup_1.1.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe) — 33,4 МБ
+- **Установщик:** [Stickio_Setup_1.2.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.2.0.exe) — 33,4 МБ
 
 ```
 SHA-256  c4067e9bedd5a8e733cfda8b195e0e74ce2ab221f493a1a5ef2a7919cf773203
@@ -165,7 +165,7 @@ The interface comes in **Russian and English**; switch it in the settings, no
 restart needed.
 
 - Website: <https://stickio.tumioai.ru>
-- Installer: [Stickio_Setup_1.1.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe) (33.4 MB, Windows 10/11 64-bit)
+- Installer: [Stickio_Setup_1.2.0.exe](https://stickio.tumioai.ru/downloads/Stickio_Setup_1.2.0.exe) (33.4 MB, Windows 10/11 64-bit)
 - The installer is unsigned, so SmartScreen may warn about an unknown publisher.
 
 Built with Python 3.11 and PySide6 (Qt 6), SQLite. Licensed under the

@@ -41,12 +41,14 @@ Stickio — сайт stickio.tumioai.ru
 
 На сервере и проверено запросами снаружи:
 
-  установщик     35 068 947 байт, sha256 c4067e9bedd5a8e733cfda8b195e0e74
-                 ce2ab221f493a1a5ef2a7919cf773203
-                 downloads/Stickio_Setup_1.1.0.exe — скачан снаружи
-                 и совпал с dist/Stickio_Setup_1.1.0.exe побайтово;
-  страницы       index.html, 404.html, privacy.html, sitemap.xml, en/index.html,
-                 en/privacy.html — совпадают с локальными по sha256;
+  установщик     35 066 129 байт, sha256 a2d8c47fae7a4a5a449c467696f01eeb
+                 e4f2c994438b17e1ae5c9a026191a032
+                 downloads/Stickio_Setup_1.2.0.exe — скачан снаружи
+                 и совпал с dist/Stickio_Setup_1.2.0.exe побайтово;
+  страницы       404.html, privacy.html, sitemap.xml, en/privacy.html —
+                 совпадают с локальными по sha256; index.html и
+                 en/index.html на сервере отличаются: там стоит промо-блок
+                 TumioAI, которого нет в репозитории (см. ниже);
   assets/        все пять картинок и значок отдаются (200);
   битая ссылка   отдаёт 404 и фирменную страницу, а не заглушку nginx;
   сжатие         Content-Encoding: gzip на HTML;
@@ -59,7 +61,14 @@ Stickio — сайт stickio.tumioai.ru
 Установщик 1.0.1 с сервера удалён (кем — не я, время 14:49). Это ничего
 не сломало: ни одна живая страница на него не ссылалась, а ссылка в релизе
 v1.0.1 на GitHub ведёт на вложение самого релиза, а не на этот сайт.
-Восстанавливать не нужно, но и 1.1.0 удалять не стоит по той же причине.
+Восстанавливать не нужно. Установщик 1.1.0 с сервера убран при выпуске
+1.2.0: к тому моменту ни одна страница на него не ссылалась.
+
+**Выкладывать `site/` поверх сервера нельзя**: в `index.html` и
+`en/index.html` на сервере живёт промо-блок TumioAI (`.tumio-promo`), которого
+нет в репозитории, а `en/index.html` там ещё и отформатирован иначе. Правки
+на сервере делаются точечно (`cp -a` + `sed` + `chown www-data` + `chmod 644`),
+а не заливкой папки.
 
 Исправленный конфиг nginx применён 17.09: на сервере лежала ПЕРВАЯ версия
 файла — та, где add_header в location отменял наследование, и на HTML,
@@ -118,7 +127,7 @@ HTTP/2 включает, но проверить это отсюда нечем.
 Свежий установщик положить в downloads (файлы не перезаписывают друг
 друга, в имени есть версия):
 
-  scp dist/Stickio_Setup_1.1.0.exe \
+  scp dist/Stickio_Setup_1.2.0.exe \
       root@5.44.40.47:/var/www/stickio.tumioai.ru/downloads/
 
 
@@ -230,7 +239,7 @@ Search Console.
 наследованием add_header:
 
   for u in / /index.html /privacy.html /en/ /assets/og-stickio.png \
-           /downloads/Stickio_Setup_1.1.0.exe; do
+           /downloads/Stickio_Setup_1.2.0.exe; do
     echo "--- $u"
     curl -sI "https://stickio.tumioai.ru$u" | grep -i "nosniff\|referrer\|x-frame"
   done
@@ -238,8 +247,8 @@ Search Console.
 Установщик скачать снаружи и сверить сумму — иначе неизвестно, целый ли
 файл доехал:
 
-  curl -o setup.exe https://stickio.tumioai.ru/downloads/Stickio_Setup_1.1.0.exe
-  sha256sum setup.exe   # c4067e9b…773203
+  curl -o setup.exe https://stickio.tumioai.ru/downloads/Stickio_Setup_1.2.0.exe
+  sha256sum setup.exe   # a2d8c47f…191a032
 
 Проверка разметки для поисковиков:
   https://validator.schema.org/#url=https%3A%2F%2Fstickio.tumioai.ru%2F

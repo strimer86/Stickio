@@ -2,7 +2,7 @@
 
 ## 1.2.0 — 18 сентября 2026
 
-**Скачать:** ссылка появится после публикации релиза
+**Скачать:** [Stickio_Setup_1.2.0.exe](https://github.com/strimer86/Stickio/releases/download/v1.2.0/Stickio_Setup_1.2.0.exe) — 33,4 МБ
 
 ```
 SHA-256  a2d8c47fae7a4a5a449c467696f01eebe4f2c994438b17e1ae5c9a026191a032

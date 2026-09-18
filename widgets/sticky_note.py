@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from database.database import DatabaseClosedError
 from models.note import Note
 from services import i18n
+from services import pinning
 from services.settings import Settings
 from widgets.toolbar import Toolbar
 
@@ -369,6 +370,80 @@ class StickyNote(QWidget):
         self.toolbar.bold_toggled.connect(self.set_bold)
         self.toolbar.opacity_changed.connect(self.set_opacity)
         self.toolbar.delete_requested.connect(self.confirm_delete)
+        self.toolbar.pin_toggled.connect(self.set_always_on_top)
+
+        # Закрепление применяется после первого show(): до него у окна нет
+        # нативного hwnd, а стили Win32 ставятся именно по нему.
+        self._pin_applied = False
+        self._editing = False
+
+    def set_always_on_top(self, enabled: bool):
+        """Закрепляет заметку поверх всех окон или возвращает как было.
+
+        Флаг запоминается в модели, потому что должен пережить перезапуск:
+        закреплённая заметка обязана встать поверх всех и после нового
+        запуска приложения.
+        """
+        enabled = bool(enabled)
+        if enabled == self.note.always_on_top and self._pin_applied:
+            return
+        self.note.always_on_top = enabled
+        if not enabled:
+            self._editing = False
+        self._apply_window_pin()
+        self.save_note()
+
+    def _apply_window_pin(self):
+        """Ставит расширенные стили окна под текущее состояние заметки.
+
+        Только Win32-вызовы, без смены Qt-флагов: ``setWindowFlags``
+        пересоздаёт нативное окно и сбрасывает геометрию и видимость,
+        поэтому заметка прыгнула бы в угол экрана. Здесь hwnd остаётся
+        тем же, меняется только стиль.
+        """
+        if not pinning.supported():
+            return
+        hwnd = int(self.winId()) if self.winId() else 0
+        if not hwnd:
+            return
+        current = pinning.get_exstyle(hwnd)
+        if not self.note.always_on_top:
+            new_style = pinning.unpinned_exstyle(current)
+        elif self._editing:
+            new_style = pinning.editable_exstyle(current)
+        else:
+            new_style = pinning.pinned_exstyle(current)
+        if new_style != current:
+            pinning.set_exstyle(hwnd, new_style)
+        self._pin_applied = True
+
+    def _begin_editing(self):
+        """Разрешает активацию окна, чтобы в заметку можно было печатать.
+
+        Окно с WS_EX_NOACTIVATE не получает WM_KEYDOWN — проба показала, что
+        фокус остаётся False. Поэтому на время набора запрет активации
+        снимается: заметка остаётся поверх всех, но становится активной,
+        и клавиатура доходит до редактора.
+        """
+        if not self.note.always_on_top or self._editing:
+            return
+        self._editing = True
+        self._apply_window_pin()
+        self.activateWindow()
+        self.editor.setFocus()
+
+    def _end_editing(self):
+        """Возвращает запрет активации после того, как фокус ушёл."""
+        if not self._editing:
+            return
+        self._editing = False
+        self._apply_window_pin()
+
+    def focusOutEvent(self, event):
+        # Фокус ушёл — заметка снова должна быть «просто виджетом»
+        # и не отбирать ввод у активной программы.
+        super().focusOutEvent(event)
+        self._end_editing()
 
     def _load_note(self):
         # геометрию ставим первой, чтобы последующий save_note (если сигнал проскочит) сохранил правильные координаты
@@ -393,6 +468,7 @@ class StickyNote(QWidget):
         self.editor.mergeCurrentCharFormat(default_fmt)
 
         self.toolbar.set_bold_checked(self.note.bold)
+        self.toolbar.set_pin_checked(self.note.always_on_top)
 
         self.editor.textChanged.connect(self._schedule_save)
 
@@ -401,6 +477,9 @@ class StickyNote(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        # Стиль ставим после показа: до первого show() у окна ещё нет hwnd,
+        # и Win32-вызовы просто не нашли бы, к чему применить флаг.
+        self._apply_window_pin()
         self._ensure_on_screen()
         self._position_toolbar()
 
@@ -847,6 +926,9 @@ class StickyNote(QWidget):
                 self.begin_resize(event.globalPosition().toPoint(), dirs)
                 event.accept()
                 return
+            # Закреплённая заметка неактивна, поэтому печать в неё без
+            # этого вызова не идёт: WM_KEYDOWN уходит активной программе.
+            self._begin_editing()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):

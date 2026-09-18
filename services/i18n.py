@@ -343,6 +343,8 @@ TRANSLATIONS = {
         "Удалить эту заметку безвозвратно?": "Delete this note permanently?",
 
         # --- widgets/toolbar.py ---
+        "Закрепить заметку поверх всех окон": "Pin note on top of all windows",
+        "Открепить заметку": "Unpin note",
         "Цвет фона": "Background color",
         "Цвет текста": "Text color",
         "Уменьшить текст": "Decrease text size",

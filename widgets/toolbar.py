@@ -6,7 +6,7 @@
 """
 
 from PySide6.QtCore import QRectF, Qt, QPoint, QSize, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QSlider, QSpinBox, QWidget,
 )
@@ -80,6 +80,29 @@ def trash_icon(color: str = "#ffffff") -> QIcon:
     return QIcon(pm)
 
 
+def pin_icon(color: str = "#1f1f1f") -> QIcon:
+    """Значок булавки 16×16 — вместо надписи «Закрепить».
+
+    Надпись не влезла бы в квадрат 24×24 рядом с B/A/±, а иконка
+    читается и в нажатом состоянии: цвет меняет QSS, не рисунок.
+    """
+    pm = QPixmap(16, 16)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(color), 1.6))
+    p.setBrush(QColor(color))
+    # шляпка: круг сверху
+    p.drawEllipse(5, 1, 6, 5)
+    # игла: diagonal down
+    p.drawLine(8, 6, 8, 14)
+    # tip
+    p.setPen(QPen(QColor(color), 1.6))
+    p.drawPoint(8, 15)
+    p.end()
+    return QIcon(pm)
+
+
 class Toolbar(QWidget):
     """Панель инструментов для настройки внешнего вида заметки."""
 
@@ -89,6 +112,7 @@ class Toolbar(QWidget):
     bold_toggled = Signal(bool)
     opacity_changed = Signal(int)
     delete_requested = Signal()
+    pin_toggled = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(
@@ -206,6 +230,21 @@ class Toolbar(QWidget):
         self.bold_button.toggled.connect(self.bold_toggled)
         grid.addWidget(self.bold_button, 0, 5)
 
+        # Закрепление стоит перед «Удалить»: часто используемую кнопку
+        # ставим ближе к центру, а удаление остаётся на отлёте справа.
+        self.pin_button = QPushButton()
+        self.pin_button.setObjectName("pinButton")
+        self.pin_button.setIcon(pin_icon("#1f1f1f"))
+        self.pin_button.setIconSize(QSize(12, 12))
+        self.pin_button.setCheckable(True)
+        self.pin_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.pin_button.setFixedSize(BTN_H, BTN_H)
+        self.pin_button.toggled.connect(self.pin_toggled)
+        # Подсказку обновляем после отправки сигнала наружу, чтобы текст
+        # соответствовал новому состоянию, а не предыдущему.
+        self.pin_button.toggled.connect(self._update_pin_tooltip)
+        grid.addWidget(self.pin_button, 0, 6)
+
         self.delete_button = QPushButton()
         self.delete_button.setObjectName("deleteButton")
         self.delete_button.setIcon(trash_icon("#ffffff"))
@@ -213,7 +252,7 @@ class Toolbar(QWidget):
         self.delete_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_button.setFixedSize(BTN_H + 4, BTN_H)
         self.delete_button.clicked.connect(self.delete_requested)
-        grid.addWidget(self.delete_button, 0, 6)
+        grid.addWidget(self.delete_button, 0, 7)
 
         # --- нижняя строка: прозрачность ------------------------------
         self.opacity_title = QLabel()
@@ -237,7 +276,7 @@ class Toolbar(QWidget):
         self.opacity_label.setMinimumWidth(34)
         grid.addWidget(self.opacity_label, 1, 5, 1, 2)
 
-        for column in range(7):
+        for column in range(8):
             grid.setColumnStretch(column, 0)
 
         # Подписи ставим одним вызовом, а не по месту создания кнопок:
@@ -275,6 +314,7 @@ class Toolbar(QWidget):
         self.font_size_spin.setToolTip(i18n.tr("Размер шрифта"))
         self.font_plus.setToolTip(i18n.tr("Увеличить текст"))
         self.bold_button.setToolTip(i18n.tr("Жирный"))
+        self._update_pin_tooltip()
         self.delete_button.setToolTip(i18n.tr("Удалить заметку"))
         self.opacity_title.setText(i18n.tr("Прозрачность"))
         self.opacity_title.setToolTip(i18n.tr("Прозрачность заметки"))
@@ -309,6 +349,31 @@ class Toolbar(QWidget):
         self.bold_button.blockSignals(True)
         self.bold_button.setChecked(checked)
         self.bold_button.blockSignals(False)
+
+    def _update_pin_tooltip(self):
+        """Подсказка булавки зависит от её состояния.
+
+        Подсказка обязана говорить, что произойдёт, а не что включено:
+        «Открепить» на нажатой кнопке понятнее, чем «Закрепить» с галочкой.
+        """
+        checked = self.pin_button.isChecked()
+        self.pin_button.setToolTip(
+            i18n.tr("Открепить заметку") if checked
+            else i18n.tr("Закрепить заметку поверх всех окон")
+        )
+
+    def set_pin_checked(self, checked: bool):
+        """Ставит булавку в состояние заметки, не вызывая сигнал.
+
+        blockSignals обязателен: при загрузке окна заметки состояние
+        приходит из базы, и без блокировки получился бы «клик», который
+        тут же перезаписал бы базу тем же значением — а при восстановлении
+        видимости это запустило бы лишнее сохранение.
+        """
+        self.pin_button.blockSignals(True)
+        self.pin_button.setChecked(checked)
+        self.pin_button.blockSignals(False)
+        self._update_pin_tooltip()
 
     def _update_opacity_label(self, value: int):
         self.opacity_label.setText("{}%".format(value))

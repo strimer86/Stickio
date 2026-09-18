@@ -67,6 +67,10 @@ _MIGRATIONS = {
     "font_size": "ALTER TABLE notes ADD COLUMN font_size INTEGER DEFAULT 18",
     "bold": "ALTER TABLE notes ADD COLUMN bold INTEGER DEFAULT 0",
     "content": "ALTER TABLE notes ADD COLUMN content TEXT DEFAULT ''",
+    # Закрепление поверх всех окон. По умолчанию выключено: обычное
+    # поведение заметки менять нельзя, иначе после обновления все стикеры
+    # разом полезут поверх чужих окон.
+    "always_on_top": "ALTER TABLE notes ADD COLUMN always_on_top INTEGER DEFAULT 0",
 }
 
 # Колонки, которые можно задать при создании заметки. Список берётся из
@@ -307,12 +311,14 @@ class Database:
                     """UPDATE notes SET
                            content = ?, background_color = ?, text_color = ?,
                            font_size = ?, bold = ?, opacity = ?,
-                           x = ?, y = ?, width = ?, height = ?
+                           x = ?, y = ?, width = ?, height = ?,
+                           always_on_top = ?
                        WHERE id = ?""",
                     (
                         note.content, note.background_color, note.text_color,
                         note.font_size, int(note.bold), note.opacity,
                         note.x, note.y, note.width, note.height,
+                        int(note.always_on_top),
                         note.id,
                     ),
                 )
@@ -393,6 +399,11 @@ class Database:
                 else DEFAULT_FONT_SIZE
             ),
             bold=bool(row["bold"]) if "bold" in keys and row["bold"] is not None else False,
+            always_on_top=(
+                bool(row["always_on_top"])
+                if "always_on_top" in keys and row["always_on_top"] is not None
+                else False
+            ),
             opacity=(
                 float(row["opacity"]) if "opacity" in keys and row["opacity"] is not None
                 else DEFAULT_OPACITY

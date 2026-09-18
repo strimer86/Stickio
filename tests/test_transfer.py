@@ -50,16 +50,35 @@ class BuildExportTests(unittest.TestCase):
         text = json.dumps(transfer.build_export([make_note()]), ensure_ascii=False)
         self.assertIn("привет", text)
 
+    def test_pin_survives_export(self):
+        # Закрепление живёт в своей колонке и в EXPORT_FIELDS попало позже
+        # остальных: без отдельной проверки оно молча терялось при переносе
+        # заметок на другой компьютер.
+        record = transfer.build_export([make_note(always_on_top=True)])["notes"][0]
+        self.assertTrue(record["always_on_top"])
+        record = transfer.build_export([make_note(always_on_top=False)])["notes"][0]
+        self.assertFalse(record["always_on_top"])
+
 
 class ParseExportTests(unittest.TestCase):
     def test_round_trip_preserves_values(self):
-        original = make_note()
+        original = make_note(always_on_top=True)
         data = json.loads(
             json.dumps(transfer.build_export([original]), ensure_ascii=False)
         )
         (fields,) = transfer.parse_export(data)
         for name in transfer.EXPORT_FIELDS:
             self.assertEqual(fields[name], getattr(original, name), name)
+
+    def test_old_file_without_pin_imports(self):
+        # Файл из версии без закрепления: поля нет, заметка всё равно
+        # должна создаться, а флаг взять умолчание базы.
+        data = json.loads(
+            json.dumps(transfer.build_export([make_note()]), ensure_ascii=False)
+        )
+        del data["notes"][0]["always_on_top"]
+        (fields,) = transfer.parse_export(data)
+        self.assertNotIn("always_on_top", fields)
 
     def test_foreign_json_rejected(self):
         with self.assertRaises(transfer.TransferError):

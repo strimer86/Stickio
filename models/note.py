@@ -16,6 +16,7 @@ class Note:
     text_color: str = DEFAULT_TEXT_COLOR
     font_size: int = DEFAULT_FONT_SIZE
     bold: bool = False
+    always_on_top: bool = False
     opacity: float = DEFAULT_OPACITY
     x: int = 120
     y: int = 120

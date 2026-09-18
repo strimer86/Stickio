@@ -23,6 +23,9 @@ EXPORT_FORMAT = "stickio-notes"
 EXPORT_VERSION = 1
 
 # Что переносим. Порядок задаёт и порядок колонок в JSON, и порядок в HTML.
+# Новое поле добавляется в конец: файлы старых версий читаются и без него
+# (отсутствующий ключ просто пропускается), а порядок колонок в уже
+# выгруженных файлах от этого не ломается.
 EXPORT_FIELDS = (
     "content",
     "background_color",
@@ -34,6 +37,7 @@ EXPORT_FIELDS = (
     "y",
     "width",
     "height",
+    "always_on_top",
 )
 
 # Значения, которые обязаны быть в каждой записи. Отсутствие ключа — не
@@ -46,6 +50,10 @@ _NUMERIC_FIELDS = {
     "height": int,
     "opacity": float,
 }
+
+# Логические поля: в файле они могут быть и 0/1, и false/true, поэтому
+# приводим явно, а не через int() — иначе "false" стало бы 1.
+_BOOL_FIELDS = ("bold", "always_on_top")
 
 _TITLE = "Заметки Stickio"
 
@@ -143,7 +151,7 @@ def note_from_dict(raw) -> dict:
                     i18n.tr("Недопустимое значение поля «%s»: %r")
                     % (name, raw[name])
                 )
-        elif name == "bold":
+        elif name in _BOOL_FIELDS:
             value = bool(value)
         elif not isinstance(value, str):
             raise TransferError(

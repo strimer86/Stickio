@@ -22,7 +22,7 @@ APP_SITE_LABEL = "stickio.tumioai.ru"
 
 # Версия для запуска из исходников. Совпадает с filevers в version_info.txt
 # (проверяется тестом) и с APP_VERSION в build.bat.
-VERSION_FALLBACK = "1.1.0"
+VERSION_FALLBACK = "1.2.0"
 
 
 def copyright_line() -> str:

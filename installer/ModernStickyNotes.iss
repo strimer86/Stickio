@@ -9,7 +9,7 @@
 ; это проверяет. Иначе инсталлятор и exe будут рассказывать о себе разное.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.0"
 #endif
 
 #define MyAppName      "Stickio"
